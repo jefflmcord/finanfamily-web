@@ -1,283 +1,168 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { 
+  ArrowRight, 
+  PieChart, 
+  Wallet, 
+  CreditCard, 
+  Target, 
+  ShieldCheck, 
+  LayoutDashboard
+} from 'lucide-react';
 
-import AppLayout from '@/components/AppLayout';
-import NewTransactionModal from '@/components/NewTransactionModal';
-import DashboardOverview from '@/components/DashboardOverview';
-import UpcomingDues from '@/components/UpcomingDues';
-import CreditCardList from '@/components/CreditCardList';
-import TransactionsList from '@/components/TransactionsList';
-import AccountsManager from '@/components/AccountsManager';
-import CardsManager from '@/components/CardsManager';
-import CategoriesManager from '@/components/CategoriesManager';
-import GoalsManager from '@/components/GoalsManager';
-
-interface DashboardData {
-  month: number;
-  year: number;
-  income: {
-    received: number;
-    projected: number;
-  };
-  expenses: {
-    fixed: number;
-    variable: number;
-    paidSoFar: number;
-    totalProjected: number;
-    investments: number;
-  };
-  interest?: {
-    totalPaid: number;
-    count: number;
-  };
-  projectedBalance: number;
-  categoriesDistribution: {
-    name: string;
-    color: string;
-    total: number;
-  }[];
-}
-
-export default function Page() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [month, setMonth] = useState(10);
-  const [year, setYear] = useState(2026);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  // Navegação Modular
-  const [activeModule, setActiveModule] = useState('dashboard');
-  const [activeSubItem, setActiveSubItem] = useState('resumo');
-
-  // Modal Novo Lançamento
-  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-
-  const familyId = process.env.NEXT_PUBLIC_FAMILY_ID || '0663962f-71e2-43e1-a8a5-0c017f68536d';
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
-
-  const loadDashboard = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `${apiUrl}/api/dashboard/summary?family_id=${familyId}&month=${month}&year=${year}`
-      );
-      const result = await response.json();
-      setData(result);
-      setRefreshKey((prev) => prev + 1);
-    } catch (err) {
-      console.error('Erro ao carregar o resumo financeiro:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiUrl, familyId, month, year]);
-
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
-
+export default function LandingPage() {
   return (
-    <AppLayout
-      activeModuleId={activeModule}
-      onSelectModule={setActiveModule}
-      activeSubItemId={activeSubItem}
-      onSelectSubItem={setActiveSubItem}
-      month={month}
-      setMonth={setMonth}
-      year={year}
-      setYear={setYear}
-      onOpenNewTransaction={() => setIsTransactionModalOpen(true)}
-    >
-      {/* ========================================================
-          MÓDULO 1: VISÃO GERAL (DASHBOARD ANALÍTICO)
-          ======================================================== */}
-      {activeModule === 'dashboard' && (
-        <div className="space-y-8">
-          {loading ? (
-            <div className="h-48 flex items-center justify-center text-slate-500">
-              A carregar indicadores do dashboard...
+    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-emerald-500/30">
+      
+      {/* ================= HEADER ================= */}
+      <header className="border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-8 h-8 text-emerald-400" />
+            <span className="text-xl font-bold tracking-tight text-white">
+              Finan<span className="text-emerald-400">Family</span>
+            </span>
+          </div>
+          <nav>
+            <Link 
+              href="/dashboard" 
+              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold px-5 py-2.5 rounded-full transition-all"
+            >
+              Acessar Sistema
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* ================= HERO SECTION ================= */}
+      <section className="relative pt-32 pb-20 overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-500/20 rounded-full blur-[120px] pointer-events-none" />
+        
+        <div className="max-w-5xl mx-auto px-6 text-center relative z-10">
+          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 text-transparent bg-clip-text bg-gradient-to-r from-slate-100 to-slate-400">
+            A inteligência financeira <br /> da sua família.
+          </h1>
+          <p className="text-lg md:text-xl text-slate-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+            Abandone as planilhas complexas. Controle despesas, acompanhe receitas, gerencie cartões de crédito e planeje o futuro da sua família em um único lugar.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link 
+              href="/dashboard" 
+              className="flex items-center justify-center w-full sm:w-auto gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-lg px-8 py-4 rounded-full transition-all shadow-[0_0_40px_8px_rgba(16,185,129,0.2)]"
+            >
+              Começar Agora
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= FEATURES SECTION ================= */}
+      <section className="py-24 bg-slate-900/50 border-y border-slate-800/50">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">O controle total em suas mãos</h2>
+            <p className="text-slate-400">Tudo o que você precisa para uma gestão familiar transparente e eficiente.</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Feature 1 */}
+            <div className="bg-slate-950 border border-slate-800 p-8 rounded-3xl hover:border-emerald-500/30 transition-colors">
+              <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center mb-6">
+                <LayoutDashboard className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">Dashboard Analítico</h3>
+              <p className="text-slate-400 leading-relaxed">
+                Tenha uma visão clara do seu saldo atual, saldo projetado e distribuição de gastos por categoria em tempo real.
+              </p>
             </div>
-          ) : data ? (
-            <>
-              {activeSubItem === 'resumo' && (
-                <div className="space-y-8">
-                  {/* Visão Geral com Gráficos e Diagnóstico */}
-                  <DashboardOverview data={data} />
 
-                  {/* Contas a Vencer no Mês */}
-                  <UpcomingDues 
-                    month={month} 
-                    year={year} 
-                    onTransactionPaid={loadDashboard} 
-                  />
+            {/* Feature 2 */}
+            <div className="bg-slate-950 border border-slate-800 p-8 rounded-3xl hover:border-emerald-500/30 transition-colors">
+              <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center mb-6">
+                <CreditCard className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">Gestão de Cartões</h3>
+              <p className="text-slate-400 leading-relaxed">
+                Controle múltiplos cartões de crédito, acompanhe faturas em aberto e saiba exatamente para onde seu limite está indo.
+              </p>
+            </div>
 
-                  {/* Cartões Ativos com suporte a fatura/quitação */}
-                  <CreditCardList 
-                    refreshTrigger={refreshKey}
-                    month={month}
-                    year={year}
-                    onInvoicePaid={loadDashboard}
-                  />
+            {/* Feature 3 */}
+            <div className="bg-slate-950 border border-slate-800 p-8 rounded-3xl hover:border-emerald-500/30 transition-colors">
+              <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center mb-6">
+                <Target className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">Metas e Investimentos</h3>
+              <p className="text-slate-400 leading-relaxed">
+                Crie metas financeiras e registre investimentos. Proteja o futuro da sua família com um planejamento sólido.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= MORE DETAILS ================= */}
+      <section className="py-24">
+        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
+          <div>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+              Adeus surpresas no fim do mês.
+            </h2>
+            <p className="text-slate-400 text-lg mb-8 leading-relaxed">
+              O FinanFamily foi desenhado para eliminar a ansiedade financeira. Você cadastra suas contas a pagar e a receber, e o nosso sistema cruza os dados para te mostrar exatamente como você vai terminar o mês.
+            </p>
+            <ul className="space-y-4">
+              <li className="flex items-center gap-3 text-slate-300">
+                <ShieldCheck className="w-6 h-6 text-emerald-400" />
+                Interface limpa e livre de distrações
+              </li>
+              <li className="flex items-center gap-3 text-slate-300">
+                <PieChart className="w-6 h-6 text-emerald-400" />
+                Relatórios visuais e intuitivos
+              </li>
+              <li className="flex items-center gap-3 text-slate-300">
+                <Wallet className="w-6 h-6 text-emerald-400" />
+                Alertas de contas a vencer
+              </li>
+            </ul>
+          </div>
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-transparent rounded-3xl blur-2xl" />
+            {/* Mockup visual representativo do dashboard */}
+            <div className="relative bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="w-3 h-3 rounded-full bg-rose-500" />
+                <div className="w-3 h-3 rounded-full bg-amber-500" />
+                <div className="w-3 h-3 rounded-full bg-emerald-500" />
+              </div>
+              <div className="space-y-4">
+                <div className="h-24 bg-slate-800 rounded-xl w-full" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="h-32 bg-slate-800 rounded-xl" />
+                  <div className="h-32 bg-slate-800 rounded-xl" />
                 </div>
-              )}
-
-              {activeSubItem === 'cartoes' && (
-                <CreditCardList 
-                  refreshTrigger={refreshKey}
-                  month={month}
-                  year={year}
-                  onInvoicePaid={loadDashboard}
-                />
-              )}
-
-              {activeSubItem === 'extrato' && (
-                <TransactionsList 
-                  month={month} 
-                  year={year} 
-                  refreshTrigger={refreshKey} 
-                />
-              )}
-            </>
-          ) : (
-            <div className="text-rose-400 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
-              Não foi possível carregar os dados financeiros da família.
+              </div>
             </div>
-          )}
+          </div>
         </div>
-      )}
+      </section>
 
-      {/* ========================================================
-          MÓDULO 2: CADASTROS
-          ======================================================== */}
-      {activeModule === 'cadastros' && (
-        <div className="space-y-6">
-          {activeSubItem === 'contas' && (
-            <AccountsManager onUpdated={loadDashboard} />
-          )}
-
-          {activeSubItem === 'cartoes_cad' && (
-            <CardsManager onUpdated={loadDashboard} />
-          )}
-
-          {activeSubItem === 'categorias' && (
-            <CategoriesManager onUpdated={loadDashboard} />
-          )}
+      {/* ================= FOOTER ================= */}
+      <footer className="border-t border-slate-800 bg-slate-950 py-8">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-slate-500" />
+            <span className="text-slate-400 font-medium">FinanFamily</span>
+          </div>
+          <p className="text-slate-500 text-sm">
+            &copy; {new Date().getFullYear()} FinanFamily. Todos os direitos reservados.
+          </p>
         </div>
-      )}
+      </footer>
 
-      {/* ========================================================
-          MÓDULO 3: CONTAS A PAGAR
-          ======================================================== */}
-      {activeModule === 'contas_a_pagar' && (
-        <div className="space-y-6">
-          {activeSubItem === 'todas_despesas' && (
-            <TransactionsList 
-              month={month} 
-              year={year} 
-              refreshTrigger={refreshKey}
-              defaultType="EXPENSE"
-              defaultStatus="ALL"
-              title={`Todas as Despesas (${String(month).padStart(2, '0')}/${year})`}
-            />
-          )}
-
-          {activeSubItem === 'a_vencer' && (
-            <UpcomingDues 
-              month={month} 
-              year={year} 
-              onTransactionPaid={loadDashboard} 
-            />
-          )}
-
-          {activeSubItem === 'vencidas' && (
-            <TransactionsList 
-              month={month} 
-              year={year} 
-              refreshTrigger={refreshKey}
-              defaultType="EXPENSE"
-              defaultStatus="OVERDUE"
-              title={`Despesas Vencidas (${String(month).padStart(2, '0')}/${year})`}
-            />
-          )}
-
-          {activeSubItem === 'pagas' && (
-            <TransactionsList 
-              month={month} 
-              year={year} 
-              refreshTrigger={refreshKey}
-              defaultType="EXPENSE"
-              defaultStatus="PAID"
-              title={`Despesas Liquidadas / Pagas (${String(month).padStart(2, '0')}/${year})`}
-            />
-          )}
-        </div>
-      )}
-
-      {/* ========================================================
-          MÓDULO 4: CONTAS A RECEBER
-          ======================================================== */}
-      {activeModule === 'contas_a_receber' && (
-        <div className="space-y-6">
-          {activeSubItem === 'todas_receitas' && (
-            <TransactionsList 
-              month={month} 
-              year={year} 
-              refreshTrigger={refreshKey}
-              defaultType="INCOME"
-              defaultStatus="ALL"
-              title={`Todas as Receitas (${String(month).padStart(2, '0')}/${year})`}
-            />
-          )}
-
-          {activeSubItem === 'a_receber' && (
-            <TransactionsList 
-              month={month} 
-              year={year} 
-              refreshTrigger={refreshKey}
-              defaultType="INCOME"
-              defaultStatus="PENDING"
-              title={`Receitas a Receber (${String(month).padStart(2, '0')}/${year})`}
-            />
-          )}
-
-          {activeSubItem === 'recebidas' && (
-            <TransactionsList 
-              month={month} 
-              year={year} 
-              refreshTrigger={refreshKey}
-              defaultType="INCOME"
-              defaultStatus="PAID"
-              title={`Receitas já Recebidas (${String(month).padStart(2, '0')}/${year})`}
-            />
-          )}
-        </div>
-      )}
-
-      {/* ========================================================
-          MÓDULO 5: INVESTIMENTOS
-          ======================================================== */}
-      {activeModule === 'investimentos' && (
-        <GoalsManager onUpdated={loadDashboard} />
-      )}
-
-      {/* ========================================================
-          MÓDULO 6: RELATÓRIOS
-          ======================================================== */}
-      {activeModule === 'relatorios' && (
-        <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-2">Relatórios Financeiros</h2>
-          <p className="text-xs text-slate-400">Em desenvolvimento: demonstrativos e balanço orçado vs realizado.</p>
-        </div>
-      )}
-
-      {/* Modal de Criação de Lançamento */}
-      <NewTransactionModal
-        isOpen={isTransactionModalOpen}
-        onClose={() => setIsTransactionModalOpen(false)}
-        onSuccess={loadDashboard}
-      />
-    </AppLayout>
+    </div>
   );
 }
