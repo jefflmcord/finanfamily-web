@@ -1,69 +1,283 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useEffect, useState, useCallback } from 'react';
+import { AlertCircle } from 'lucide-react';
+
+import AppLayout from '@/components/AppLayout';
+import NewTransactionModal from '@/components/NewTransactionModal';
+import DashboardOverview from '@/components/DashboardOverview';
+import UpcomingDues from '@/components/UpcomingDues';
+import CreditCardList from '@/components/CreditCardList';
+import TransactionsList from '@/components/TransactionsList';
+import AccountsManager from '@/components/AccountsManager';
+import CardsManager from '@/components/CardsManager';
+import CategoriesManager from '@/components/CategoriesManager';
+import GoalsManager from '@/components/GoalsManager';
+
+interface DashboardData {
+  month: number;
+  year: number;
+  income: {
+    received: number;
+    projected: number;
+  };
+  expenses: {
+    fixed: number;
+    variable: number;
+    paidSoFar: number;
+    totalProjected: number;
+    investments: number;
+  };
+  interest?: {
+    totalPaid: number;
+    count: number;
+  };
+  projectedBalance: number;
+  categoriesDistribution: {
+    name: string;
+    color: string;
+    total: number;
+  }[];
+}
+
+export default function Page() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [month, setMonth] = useState(10);
+  const [year, setYear] = useState(2026);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Navegação Modular
+  const [activeModule, setActiveModule] = useState('dashboard');
+  const [activeSubItem, setActiveSubItem] = useState('resumo');
+
+  // Modal Novo Lançamento
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+
+  const familyId = process.env.NEXT_PUBLIC_FAMILY_ID || '0663962f-71e2-43e1-a8a5-0c017f68536d';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${apiUrl}/api/dashboard/summary?family_id=${familyId}&month=${month}&year=${year}`
+      );
+      const result = await response.json();
+      setData(result);
+      setRefreshKey((prev) => prev + 1);
+    } catch (err) {
+      console.error('Erro ao carregar o resumo financeiro:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiUrl, familyId, month, year]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <AppLayout
+      activeModuleId={activeModule}
+      onSelectModule={setActiveModule}
+      activeSubItemId={activeSubItem}
+      onSelectSubItem={setActiveSubItem}
+      month={month}
+      setMonth={setMonth}
+      year={year}
+      setYear={setYear}
+      onOpenNewTransaction={() => setIsTransactionModalOpen(true)}
+    >
+      {/* ========================================================
+          MÓDULO 1: VISÃO GERAL (DASHBOARD ANALÍTICO)
+          ======================================================== */}
+      {activeModule === 'dashboard' && (
+        <div className="space-y-8">
+          {loading ? (
+            <div className="h-48 flex items-center justify-center text-slate-500">
+              A carregar indicadores do dashboard...
+            </div>
+          ) : data ? (
+            <>
+              {activeSubItem === 'resumo' && (
+                <div className="space-y-8">
+                  {/* Visão Geral com Gráficos e Diagnóstico */}
+                  <DashboardOverview data={data} />
+
+                  {/* Contas a Vencer no Mês */}
+                  <UpcomingDues 
+                    month={month} 
+                    year={year} 
+                    onTransactionPaid={loadDashboard} 
+                  />
+
+                  {/* Cartões Ativos com suporte a fatura/quitação */}
+                  <CreditCardList 
+                    refreshTrigger={refreshKey}
+                    month={month}
+                    year={year}
+                    onInvoicePaid={loadDashboard}
+                  />
+                </div>
+              )}
+
+              {activeSubItem === 'cartoes' && (
+                <CreditCardList 
+                  refreshTrigger={refreshKey}
+                  month={month}
+                  year={year}
+                  onInvoicePaid={loadDashboard}
+                />
+              )}
+
+              {activeSubItem === 'extrato' && (
+                <TransactionsList 
+                  month={month} 
+                  year={year} 
+                  refreshTrigger={refreshKey} 
+                />
+              )}
+            </>
+          ) : (
+            <div className="text-rose-400 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Não foi possível carregar os dados financeiros da família.
+            </div>
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+      )}
+
+      {/* ========================================================
+          MÓDULO 2: CADASTROS
+          ======================================================== */}
+      {activeModule === 'cadastros' && (
+        <div className="space-y-6">
+          {activeSubItem === 'contas' && (
+            <AccountsManager onUpdated={loadDashboard} />
+          )}
+
+          {activeSubItem === 'cartoes_cad' && (
+            <CardsManager onUpdated={loadDashboard} />
+          )}
+
+          {activeSubItem === 'categorias' && (
+            <CategoriesManager onUpdated={loadDashboard} />
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          MÓDULO 3: CONTAS A PAGAR
+          ======================================================== */}
+      {activeModule === 'contas_a_pagar' && (
+        <div className="space-y-6">
+          {activeSubItem === 'todas_despesas' && (
+            <TransactionsList 
+              month={month} 
+              year={year} 
+              refreshTrigger={refreshKey}
+              defaultType="EXPENSE"
+              defaultStatus="ALL"
+              title={`Todas as Despesas (${String(month).padStart(2, '0')}/${year})`}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          )}
+
+          {activeSubItem === 'a_vencer' && (
+            <UpcomingDues 
+              month={month} 
+              year={year} 
+              onTransactionPaid={loadDashboard} 
+            />
+          )}
+
+          {activeSubItem === 'vencidas' && (
+            <TransactionsList 
+              month={month} 
+              year={year} 
+              refreshTrigger={refreshKey}
+              defaultType="EXPENSE"
+              defaultStatus="OVERDUE"
+              title={`Despesas Vencidas (${String(month).padStart(2, '0')}/${year})`}
+            />
+          )}
+
+          {activeSubItem === 'pagas' && (
+            <TransactionsList 
+              month={month} 
+              year={year} 
+              refreshTrigger={refreshKey}
+              defaultType="EXPENSE"
+              defaultStatus="PAID"
+              title={`Despesas Liquidadas / Pagas (${String(month).padStart(2, '0')}/${year})`}
+            />
+          )}
         </div>
-      </main>
-    </div>
+      )}
+
+      {/* ========================================================
+          MÓDULO 4: CONTAS A RECEBER
+          ======================================================== */}
+      {activeModule === 'contas_a_receber' && (
+        <div className="space-y-6">
+          {activeSubItem === 'todas_receitas' && (
+            <TransactionsList 
+              month={month} 
+              year={year} 
+              refreshTrigger={refreshKey}
+              defaultType="INCOME"
+              defaultStatus="ALL"
+              title={`Todas as Receitas (${String(month).padStart(2, '0')}/${year})`}
+            />
+          )}
+
+          {activeSubItem === 'a_receber' && (
+            <TransactionsList 
+              month={month} 
+              year={year} 
+              refreshTrigger={refreshKey}
+              defaultType="INCOME"
+              defaultStatus="PENDING"
+              title={`Receitas a Receber (${String(month).padStart(2, '0')}/${year})`}
+            />
+          )}
+
+          {activeSubItem === 'recebidas' && (
+            <TransactionsList 
+              month={month} 
+              year={year} 
+              refreshTrigger={refreshKey}
+              defaultType="INCOME"
+              defaultStatus="PAID"
+              title={`Receitas já Recebidas (${String(month).padStart(2, '0')}/${year})`}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          MÓDULO 5: INVESTIMENTOS
+          ======================================================== */}
+      {activeModule === 'investimentos' && (
+        <GoalsManager onUpdated={loadDashboard} />
+      )}
+
+      {/* ========================================================
+          MÓDULO 6: RELATÓRIOS
+          ======================================================== */}
+      {activeModule === 'relatorios' && (
+        <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Relatórios Financeiros</h2>
+          <p className="text-xs text-slate-400">Em desenvolvimento: demonstrativos e balanço orçado vs realizado.</p>
+        </div>
+      )}
+
+      {/* Modal de Criação de Lançamento */}
+      <NewTransactionModal
+        isOpen={isTransactionModalOpen}
+        onClose={() => setIsTransactionModalOpen(false)}
+        onSuccess={loadDashboard}
+      />
+    </AppLayout>
   );
 }
