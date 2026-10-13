@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircle } from 'lucide-react';
 
 import AppLayout from '@/components/AppLayout';
@@ -41,6 +42,16 @@ interface DashboardData {
 }
 
 export default function Page() {
+  onst router = useRouter(); // <-- Inicialize o router
+
+  // Adicione este useEffect para verificar a segurança antes de carregar qualquer coisa
+  useEffect(() => {
+    const token = localStorage.getItem('@FinanFamily:token');
+    if (!token) {
+      // Se não tiver token, expulsa para o login imediatamente
+      router.push('/login');
+    }
+  }, [router]);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(10);
