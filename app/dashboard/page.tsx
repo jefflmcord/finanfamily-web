@@ -42,7 +42,7 @@ interface DashboardData {
 }
 
 export default function Page() {
-  onst router = useRouter(); // <-- Inicialize o router
+  const router = useRouter(); // <-- Inicialize o router
 
   // Adicione este useEffect para verificar a segurança antes de carregar qualquer coisa
   useEffect(() => {
