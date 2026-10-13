@@ -645,7 +645,7 @@ export default function TransactionsList({
                         </span>
                         {Boolean(tx.interest_amount && tx.interest_amount > 0) && (
                           <span className="text-[10px] text-amber-400/90 font-normal">
-                            (Juros: +{formatCurrency(tx.interest_amount)})
+                            (Juros: +{formatCurrency(tx.interest_amount || 0)})
                           </span>
                         )}
                       </div>
