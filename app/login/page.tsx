@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Wallet, Mail, Lock, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -25,7 +23,7 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       const data = await response.json();
@@ -34,19 +32,22 @@ export default function LoginPage() {
         throw new Error(data.error || 'Erro ao realizar login.');
       }
 
-      // Salvar o token e os dados do usuário no localStorage
+      if (!data.token || !data.user) {
+        throw new Error('Resposta inválida do servidor.');
+      }
+
+      // Guardar o token e os dados do utilizador no localStorage
       localStorage.setItem('@FinanFamily:token', data.token);
       localStorage.setItem('@FinanFamily:user', JSON.stringify(data.user));
 
-      // Verificar se é o primeiro acesso (troca de senha obrigatória)
+      // Redirecionamento direto e seguro
       if (data.user.must_change_password) {
-        router.push('/primeiro-acesso');
+        window.location.href = '/primeiro-acesso';
       } else {
-        router.push('/dashboard');
+        window.location.href = '/dashboard';
       }
     } catch (err: any) {
-      setError(err.message);
-    } finally {
+      setError(err.message || 'Falha ao conectar com o servidor.');
       setIsLoading(false);
     }
   };
@@ -54,7 +55,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-6 selection:bg-emerald-500/30">
       
-      {/* Botão de voltar */}
       <div className="absolute top-8 left-8">
         <Link href="/" className="text-slate-400 hover:text-white transition-colors flex items-center gap-2 text-sm font-medium">
           &larr; Voltar para o início
@@ -62,7 +62,6 @@ export default function LoginPage() {
       </div>
 
       <div className="w-full max-w-md">
-        {/* Logotipo */}
         <div className="flex flex-col items-center mb-10">
           <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-xl">
             <Wallet className="w-8 h-8 text-emerald-400" />
@@ -71,7 +70,6 @@ export default function LoginPage() {
           <p className="text-slate-400 text-center">Digite seus dados de acesso para entrar no painel da sua família.</p>
         </div>
 
-        {/* Formulário */}
         <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-3xl shadow-2xl backdrop-blur-sm">
           
           {error && (
