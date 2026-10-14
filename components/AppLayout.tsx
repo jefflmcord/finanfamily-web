@@ -134,6 +134,7 @@ export default function AppLayout({
 }: AppLayoutProps) {
   const [userName, setUserName] = useState('Administrador');
   const [userEmail, setUserEmail] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -143,6 +144,7 @@ export default function AppLayout({
         const parsed = JSON.parse(storedUser);
         if (parsed.name) setUserName(parsed.name);
         if (parsed.email) setUserEmail(parsed.email);
+        if (parsed.avatar_url) setAvatarUrl(parsed.avatar_url);
       } catch {
         // Ignora erro de parse
       }
@@ -234,12 +236,20 @@ export default function AppLayout({
           </nav>
         </div>
 
-        {/* Rodapé da Sidebar: Usuário Logado + Botão Sair */}
+        {/* Rodapé da Sidebar: Foto/Avatar do Utilizador + Nome + Botão Sair */}
         <div className="p-4 border-t border-slate-800/80 bg-slate-950/40">
           <div className="flex items-center gap-3 mb-3 px-2">
-            <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400 shrink-0">
-              <User className="w-5 h-5" />
-            </div>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={userName}
+                className="w-9 h-9 rounded-full object-cover border border-emerald-500/30 shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400 shrink-0">
+                <User className="w-5 h-5" />
+              </div>
+            )}
             <div className="overflow-hidden">
               <p className="text-sm font-semibold text-white truncate">{userName}</p>
               {userEmail && (
@@ -261,11 +271,10 @@ export default function AppLayout({
       {/* ================= ÁREA DE CONTEÚDO PRINCIPAL ================= */}
       <div className="flex-1 flex flex-col min-w-0">
         
-        {/* Cabeçalho Superior (Filtro de Período e Sub-abas) */}
+        {/* Cabeçalho Superior */}
         <header className="bg-slate-900/60 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-40">
           <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             
-            {/* Título do Módulo Ativo + Botão Mobile */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setMobileMenuOpen(true)}
@@ -312,7 +321,6 @@ export default function AppLayout({
             </div>
           </div>
 
-          {/* Sub-navegação (Abas do Módulo) */}
           {currentModule.subItems.length > 1 && (
             <div className="px-6 flex items-center gap-2 overflow-x-auto border-t border-slate-800/50 pt-2 pb-2">
               {currentModule.subItems.map((sub) => {
@@ -335,7 +343,7 @@ export default function AppLayout({
           )}
         </header>
 
-        {/* Conteúdo Dinâmico da Página */}
+        {/* Conteúdo Dinâmico */}
         <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
           {children}
         </main>
