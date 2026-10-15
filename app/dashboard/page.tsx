@@ -78,17 +78,18 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, [router]);
 
-  // Formatar moeda (BRL)
-  const formatCurrency = (value: number) => {
+  // Formatar moeda (BRL) blindado contra valores vazios (NaN)
+  const formatCurrency = (value: any) => {
+    const numericValue = Number(value);
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
-    }).format(value);
+    }).format(isNaN(numericValue) ? 0 : numericValue);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
+      <div className="flex h-full flex-col justify-center items-center">
         <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
         <p className="text-slate-400 font-medium">Carregando painel da família...</p>
       </div>
@@ -96,7 +97,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 p-6 md:p-10 font-sans selection:bg-emerald-500/30">
+    <div className="bg-slate-950 text-slate-50 p-6 md:p-10 font-sans selection:bg-emerald-500/30 min-h-full">
       <div className="max-w-6xl mx-auto space-y-8">
         
         {/* Cabeçalho do Dashboard */}
@@ -130,7 +131,7 @@ export default function DashboardPage() {
               <Wallet className="w-5 h-5 text-emerald-400" />
             </div>
             <p className="text-3xl md:text-4xl font-black text-white relative z-10">
-              {formatCurrency(summary?.balance || 0)}
+              {formatCurrency(summary?.balance)}
             </p>
           </div>
 
@@ -140,7 +141,7 @@ export default function DashboardPage() {
               <ArrowUpRight className="w-5 h-5 text-emerald-400" />
             </div>
             <p className="text-3xl md:text-4xl font-black text-emerald-400">
-              {formatCurrency(summary?.income || 0)}
+              {formatCurrency(summary?.income)}
             </p>
           </div>
 
@@ -150,7 +151,7 @@ export default function DashboardPage() {
               <ArrowDownRight className="w-5 h-5 text-rose-400" />
             </div>
             <p className="text-3xl md:text-4xl font-black text-rose-400">
-              {formatCurrency(summary?.expense || 0)}
+              {formatCurrency(summary?.expense)}
             </p>
           </div>
         </div>
