@@ -1,31 +1,15 @@
-import './globals.css';
-import type { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'FinanFamily',
-  description: 'Gestão Financeira Familiar',
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="pt-BR" className="dark">
-      <body className="bg-slate-950 text-slate-100 antialiased min-h-screen">
-        {children}
-      </body>
-    </html>
-  );
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const viewport: Viewport = {
   themeColor: '#020617',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false, // Impede que a tela dê zoom acidental ao tocar nos botões no iPhone
+  userScalable: false, // Impede zoom acidental ao tocar nos campos no iPhone/Android
 };
 
 export const metadata: Metadata = {
@@ -41,4 +25,17 @@ export const metadata: Metadata = {
     telephone: false,
   },
 };
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="pt-BR" className="dark">
+      <body className={`${inter.className} bg-slate-950 text-slate-50 antialiased selection:bg-emerald-500/30`}>
+        {children}
+      </body>
+    </html>
+  );
 }
