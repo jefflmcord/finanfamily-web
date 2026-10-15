@@ -117,25 +117,36 @@ export default function DashboardPage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(isNaN(n) ? 0 : n);
   };
 
-  // Salvar Novo Lançamento Avançado (Contas a Pagar / Receber)
+  // Salvar Novo Lançamento Avançado com o family_id correto do utilizador logado
   const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!txDescription || !txAmount) return;
 
-    setSavingTx(true);
+    const userStr = localStorage.getItem('@FinanFamily:user');
+    let currentFamilyId = familyId;
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.family_id) {
+          currentFamilyId = user.family_id;
+        }
+      } catch (e) {}
+    }
+
+    setSavingTx5(true);
     try {
       const res = await fetch('https://finanfamily-api.onrender.com/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          family_id: familyId,
+          family_id: Number(currentFamilyId),
           description: txDescription,
           amount: txAmount,
           type: txType,
           payment_method: txPaymentMethod,
-          account_id: txAccountId || null,
-          credit_card_id: txCardId || null,
-          category_id: txCategoryId || null,
+          account_id: txAccountId ? Number(txAccountId) : null,
+          credit_card_id: txCardId ? Number(txCardId) : null,
+          category_id: txCategoryId ? Number(txCategoryId) : null,
           transaction_date: txTransactionDate,
           due_date: txDueDate,
           total_installments: Number(txTotalInstallments) || 1,
@@ -158,8 +169,12 @@ export default function DashboardPage() {
     } catch (e) {
       setError('Erro ao salvar transação.');
     } finally {
-      setSavingTx(false);
+      setSavingTx5(false);
     }
+  };
+
+  const setSavingTx5 = (val: boolean) => {
+    setSavingTx(val);
   };
 
   // Cadastrar Cartão de Crédito
@@ -173,7 +188,7 @@ export default function DashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          family_id: familyId,
+          family_id: Number(familyId),
           name: cardName,
           brand: cardBrand,
           total_limit: cardLimit,
@@ -203,7 +218,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
         <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
-        <p className="text-slate-400 font-medium">Carregando painel financeiro...</p>
+        <p className="text-slate-400 font-medium">A carregar painel financeiro...</p>
       </div>
     );
   }
@@ -448,7 +463,7 @@ export default function DashboardPage() {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
-                <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm">
+                <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm cursor-pointer">
                   + Adicionar Conta a Pagar
                 </button>
               </div>
@@ -477,7 +492,7 @@ export default function DashboardPage() {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-extrabold text-white">Contas a Receber</h2>
-                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm">
+                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm cursor-pointer">
                   + Adicionar Conta a Receber
                 </button>
               </div>
