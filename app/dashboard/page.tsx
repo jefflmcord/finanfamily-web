@@ -28,7 +28,7 @@ export default function DashboardPage() {
 
   // Módulos Superiores (Header)
   const [activeModule, setActiveModule] = useState<'cadastros' | 'pagar' | 'receber' | 'investimentos'>('cadastros');
-  // Submenus da Sidebar Esquerda de acordo com o módulo ativo
+  // Submenus da Sidebar Esquerda
   const [activeSubMenu, setActiveSubMenu] = useState<string>('geral');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -43,6 +43,21 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [userName, setUserName] = useState('Família');
   const [familyId, setFamilyId] = useState<string | number>('1');
+
+  // Modal de Novo Lançamento Avançado (Contas a Pagar/Receber)
+  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [savingTx, setSavingTx] = useState(false);
+  const [txType, setTxType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
+  const [txDescription, setTxDescription] = useState('');
+  const [txAmount, setTxAmount] = useState('');
+  const [txPaymentMethod, setTxPaymentMethod] = useState('BOLETO'); // BOLETO, PIX, CASH, CARD
+  const [txAccountId, setTxAccountId] = useState('');
+  const [txCardId, setTxCardId] = useState('');
+  const [txCategoryId, setTxCategoryId] = useState('');
+  const [txTransactionDate, setTxTransactionDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [txDueDate, setTxDueDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [txTotalInstallments, setTxTotalInstallments] = useState('1');
+  const [txStartInstallment, setTxStartInstallment] = useState('1');
 
   // Modal de Novo Cartão de Crédito
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -102,7 +117,52 @@ export default function DashboardPage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(isNaN(n) ? 0 : n);
   };
 
-  // Cadastrar Cartão de Crédito usando a API real
+  // Salvar Novo Lançamento Avançado (Contas a Pagar / Receber)
+  const handleSaveTransaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!txDescription || !txAmount) return;
+
+    setSavingTx(true);
+    try {
+      const res = await fetch('https://finanfamily-api.onrender.com/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          family_id: familyId,
+          description: txDescription,
+          amount: txAmount,
+          type: txType,
+          payment_method: txPaymentMethod,
+          account_id: txAccountId || null,
+          credit_card_id: txCardId || null,
+          category_id: txCategoryId || null,
+          transaction_date: txTransactionDate,
+          due_date: txDueDate,
+          total_installments: Number(txTotalInstallments) || 1,
+          start_installment: Number(txStartInstallment) || 1,
+          status: 'PENDING'
+        }),
+      });
+
+      if (res.ok) {
+        setIsTxModalOpen(false);
+        setTxDescription('');
+        setTxAmount('');
+        setTxTotalInstallments('1');
+        setTxStartInstallment('1');
+        await fetchData();
+      } else {
+        const err = await res.json();
+        setError(err.error || 'Erro ao salvar lançamento.');
+      }
+    } catch (e) {
+      setError('Erro ao salvar transação.');
+    } finally {
+      setSavingTx(false);
+    }
+  };
+
+  // Cadastrar Cartão de Crédito
   const handleSaveCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cardName || !cardBrand || !cardLimit) return;
@@ -148,7 +208,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Cálculos rápidos para o resumo geral
   const totalBalance = accounts.reduce((acc, curr) => acc + Number(curr.current_balance || 0), 0);
   const totalIncome = transactions.filter(t => t.type === 'INCOME' && t.status === 'PAID').reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
   const totalExpense = transactions.filter(t => t.type === 'EXPENSE' && t.status === 'PAID').reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
@@ -156,7 +215,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col font-sans">
       
-      {/* ================= HEADER SUPERIOR (MÓDULOS PRINCIPAIS) ================= */}
+      {/* ================= HEADER SUPERIOR (MÓDULOS + BOTÃO LANÇAMENTO) ================= */}
       <header className="bg-slate-900 border-b border-slate-800 h-20 px-6 flex items-center justify-between z-30">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/25 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -203,7 +262,14 @@ export default function DashboardPage() {
           </button>
         </nav>
 
-        <div className="flex items-center gap-3">
+        {/* Botão de Lançamento no Header */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setIsTxModalOpen(true)}
+            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-5 rounded-xl shadow-lg flex items-center gap-2 cursor-pointer transition-all"
+          >
+            <PlusCircle className="w-5 h-5" /> Novo Lançamento
+          </button>
           <button
             onClick={() => { localStorage.clear(); router.push('/login'); }}
             className="flex items-center gap-2 text-slate-400 hover:text-rose-400 text-sm font-semibold p-2 cursor-pointer"
@@ -216,7 +282,7 @@ export default function DashboardPage() {
       {/* ================= CORPO PRINCIPAL COM SIDEBAR LATERAL ================= */}
       <div className="flex flex-1 min-h-[calc(100vh-5rem)]">
         
-        {/* SIDEBAR ESQUERDA (MENUS ESPECÍFICOS DO MÓDULO ATIVO) */}
+        {/* SIDEBAR ESQUERDA (MENUS ESPECÍFICOS DO MÓDULO) */}
         <aside className={`fixed md:static inset-y-0 left-0 z-20 w-64 bg-slate-900/60 border-r border-slate-800 flex flex-col p-4 space-y-2 transition-transform ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800 md:hidden">
             <span className="font-bold text-white">Menu</span>
@@ -225,7 +291,6 @@ export default function DashboardPage() {
 
           <p className="text-xs uppercase font-extrabold text-slate-500 px-3 pb-1">Menus do Módulo</p>
 
-          {/* MENUS DO MÓDULO: CADASTROS */}
           {activeModule === 'cadastros' && (
             <>
               <button onClick={() => setActiveSubMenu('geral')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'geral' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
@@ -243,7 +308,6 @@ export default function DashboardPage() {
             </>
           )}
 
-          {/* MENUS DO MÓDULO: CONTAS A PAGAR */}
           {activeModule === 'pagar' && (
             <>
               <button onClick={() => setActiveSubMenu('contas_pagar')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
@@ -252,7 +316,6 @@ export default function DashboardPage() {
             </>
           )}
 
-          {/* MENUS DO MÓDULO: CONTAS A RECEBER */}
           {activeModule === 'receber' && (
             <>
               <button onClick={() => setActiveSubMenu('contas_receber')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
@@ -261,7 +324,6 @@ export default function DashboardPage() {
             </>
           )}
 
-          {/* MENUS DO MÓDULO: INVESTIMENTOS */}
           {activeModule === 'investimentos' && (
             <>
               <button onClick={() => setActiveSubMenu('metas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
@@ -271,7 +333,7 @@ export default function DashboardPage() {
           )}
         </aside>
 
-        {/* CONTEÚDO PRINCIPAL EXIBIDO */}
+        {/* CONTEÚDO PRINCIPAL */}
         <main className="flex-1 p-6 md:p-10 max-w-5xl mx-auto space-y-8">
           
           {error && (
@@ -349,7 +411,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* SUBMENU: CADASTROS -> CONTAS BANCÁRIAS */}
+          {/* SUBMENU: CADASTROS -> CONTAS */}
           {activeModule === 'cadastros' && activeSubMenu === 'contas' && (
             <div className="space-y-6">
               <h2 className="text-2xl font-extrabold text-white">Contas Bancárias</h2>
@@ -384,7 +446,12 @@ export default function DashboardPage() {
           {/* MÓDULO: CONTAS A PAGAR */}
           {activeModule === 'pagar' && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
+                <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm">
+                  + Adicionar Conta a Pagar
+                </button>
+              </div>
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
                 {transactions.filter(t => t.type === 'EXPENSE').length > 0 ? (
                   <div className="divide-y divide-slate-800">
@@ -392,7 +459,7 @@ export default function DashboardPage() {
                       <div key={t.id} className="py-4 flex justify-between items-center">
                         <div>
                           <p className="font-bold text-white">{t.description}</p>
-                          <p className="text-xs text-slate-400">Vencimento: {t.due_date} • Status: {t.status}</p>
+                          <p className="text-xs text-slate-400">Vencimento: {t.due_date} • Método: {t.payment_method} {t.installment_number ? `(${t.installment_number}/${t.total_installments})` : ''}</p>
                         </div>
                         <span className="text-rose-400 font-bold">{formatCurrency(t.amount)}</span>
                       </div>
@@ -408,7 +475,12 @@ export default function DashboardPage() {
           {/* MÓDULO: CONTAS A RECEBER */}
           {activeModule === 'receber' && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-extrabold text-white">Contas a Receber</h2>
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-extrabold text-white">Contas a Receber</h2>
+                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm">
+                  + Adicionar Conta a Receber
+                </button>
+              </div>
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
                 {transactions.filter(t => t.type === 'INCOME').length > 0 ? (
                   <div className="divide-y divide-slate-800">
@@ -416,7 +488,7 @@ export default function DashboardPage() {
                       <div key={t.id} className="py-4 flex justify-between items-center">
                         <div>
                           <p className="font-bold text-white">{t.description}</p>
-                          <p className="text-xs text-slate-400">Data: {t.transaction_date} • Status: {t.status}</p>
+                          <p className="text-xs text-slate-400">Data: {t.transaction_date}</p>
                         </div>
                         <span className="text-emerald-400 font-bold">{formatCurrency(t.amount)}</span>
                       </div>
@@ -455,6 +527,107 @@ export default function DashboardPage() {
 
         </main>
       </div>
+
+      {/* ================= MODAL DE NOVO LANÇAMENTO (COMPLETO) ================= */}
+      {isTxModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative my-8">
+            <button onClick={() => setIsTxModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
+            <h3 className="text-2xl font-extrabold text-white mb-6">Novo Lançamento / Conta</h3>
+
+            <form onSubmit={handleSaveTransaction} className="space-y-4">
+              {/* Tipo Despesa vs Receita */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                <button type="button" onClick={() => setTxType('EXPENSE')} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'EXPENSE' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}>Contas a Pagar (Saída)</button>
+                <button type="button" onClick={() => setTxType('INCOME')} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber (Entrada)</button>
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Descrição da Conta</label>
+                <input type="text" required placeholder="Ex: Aluguel, Supermercado, Salário..." value={txDescription} onChange={e => setTxDescription(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              </div>
+
+              {/* Valor e Forma de Pagamento */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Valor Total (R$)</label>
+                  <input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Forma de Pagamento</label>
+                  <select value={txPaymentMethod} onChange={e => setTxPaymentMethod(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
+                    <option value="BOLETO">Boleto / Pix / Dinheiro</option>
+                    <option value="CARD">Cartão de Crédito</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Se for Cartão de Crédito */}
+              {txPaymentMethod === 'CARD' && (
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Selecionar Cartão</label>
+                    <select value={txCardId} onChange={e => setTxCardId(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white">
+                      <option value="">Escolha o cartão...</option>
+                      {creditCards.map(c => <option key={c.id} value={c.id}>{c.name} (Fechamento dia {c.closing_day})</option>)}
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-emerald-400">💡 O sistema calculará automaticamente a fatura de vencimento com base no dia de fechamento do cartão.</p>
+                </div>
+              )}
+
+              {/* Se for Boleto/Pix/Dinheiro (Conta debitada) */}
+              {txPaymentMethod !== 'CARD' && (
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Conta Bancária Debitada/Creditada</label>
+                  <select value={txAccountId} onChange={e => setTxAccountId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
+                    <option value="">Selecione a conta...</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Parcelamento Inteligente */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Total de Parcelas</label>
+                  <input type="number" min="1" max="48" value={txTotalInstallments} onChange={e => setTxTotalInstallments(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Iniciar da Parcela</label>
+                  <input type="number" min="1" max="48" value={txStartInstallment} onChange={e => setTxStartInstallment(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                </div>
+              </div>
+
+              {/* Datas */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Data do Lançamento</label>
+                  <input type="date" value={txTransactionDate} onChange={e => setTxTransactionDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Data de Vencimento</label>
+                  <input type="date" value={txDueDate} onChange={e => setTxDueDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                </div>
+              </div>
+
+              {/* Categoria */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Categoria</label>
+                <select value={txCategoryId} onChange={e => setTxCategoryId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
+                  <option value="">Selecione a categoria...</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+
+              <button type="submit" disabled={savingTx} className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer">
+                {savingTx ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-5 h-5" /> Salvar Lançamento</>}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE NOVO CARTÃO DE CRÉDITO */}
       {isCardModalOpen && (
