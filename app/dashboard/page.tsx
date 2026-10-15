@@ -232,13 +232,17 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!goalTitle || !goalTargetAmount || !goalMonths) return;
 
-    let resolvedFamilyId = Number(familyId || 1);
+    let resolvedFamilyId = 1;
     const userStr = localStorage.getItem('@FinanFamily:user');
     if (userStr) {
       try {
         const userObj = JSON.parse(userStr);
         resolvedFamilyId = Number(userObj.family_id || userObj.familyId || familyId || 1);
-      } catch (e) {}
+      } catch (e) {
+        resolvedFamilyId = Number(familyId || 1);
+      }
+    } else {
+      resolvedFamilyId = Number(familyId || 1);
     }
 
     setSavingGoal(true);
@@ -257,7 +261,7 @@ export default function DashboardPage() {
         payment_method: 'BOLETO',
         account_id: accounts.length > 0 ? Number(accounts[0].id) : null,
         credit_card_id: null,
-        category_id: null,
+        category_id: categories.length > 0 ? Number(categories[0].id) : null,
         transaction_date: today,
         due_date: today,
         total_installments: monthsCount,
@@ -271,6 +275,8 @@ export default function DashboardPage() {
         body: JSON.stringify(txPayload),
       });
 
+      const data = await resTx.json();
+
       if (resTx.ok) {
         setIsGoalModalOpen(false);
         setGoalTitle('');
@@ -278,8 +284,7 @@ export default function DashboardPage() {
         setGoalMonths('12');
         await fetchData();
       } else {
-        const errData = await resTx.json();
-        setError(errData.error || 'Erro ao gerar lançamentos do objetivo nas contas a pagar.');
+        setError(data.error || 'Erro ao gerar lançamentos do objetivo nas contas a pagar.');
       }
     } catch (err) {
       setError('Erro de conexão ao salvar objetivo.');
