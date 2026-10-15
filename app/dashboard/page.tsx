@@ -233,16 +233,16 @@ export default function DashboardPage() {
     if (!goalTitle || !goalTargetAmount || !goalMonths) return;
 
     let resolvedFamilyId = 1;
-    const userStr = localStorage.getItem('@FinanFamily:user');
-    if (userStr) {
-      try {
-        const userObj = JSON.parse(userStr);
-        resolvedFamilyId = Number(userObj.family_id || userObj.familyId || familyId || 1);
-      } catch (e) {
-        resolvedFamilyId = Number(familyId || 1);
+    if (typeof window !== 'undefined') {
+      const userStr = localStorage.getItem('@FinanFamily:user');
+      if (userStr) {
+        try {
+          const userObj = JSON.parse(userStr);
+          resolvedFamilyId = Number(userObj.family_id || userObj.familyId || 1);
+        } catch (e) {
+          resolvedFamilyId = 1;
+        }
       }
-    } else {
-      resolvedFamilyId = Number(familyId || 1);
     }
 
     setSavingGoal(true);
@@ -250,7 +250,7 @@ export default function DashboardPage() {
 
     try {
       const payload = {
-        family_id: resolvedFamilyId,
+        family_id: Number(resolvedFamilyId) || 1,
         title: goalTitle.trim(),
         target_amount: Number(goalTargetAmount.toString().replace(',', '.')),
         months: Number(goalMonths) || 1
@@ -433,6 +433,7 @@ export default function DashboardPage() {
                 <p className="text-slate-400 text-sm mt-1">Raio-x inteligente da saúde financeira da sua família.</p>
               </div>
 
+              {/* INDICADORES INTELIGENTES RESTAURADOS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-2">
                   <p className="text-xs uppercase font-bold text-slate-400">Saldo em Contas</p>
@@ -453,6 +454,59 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
+
+              {/* GRÁFICOS E INDICADORES DE CATEGORIAS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <PieIcon className="w-5 h-5 text-emerald-400" /> Maiores Despesas por Categoria
+                  </h3>
+                  {sortedCategories.length > 0 ? (
+                    <div className="space-y-4">
+                      {sortedCategories.map(([catName, amount], index) => {
+                        const percentage = totalExpense > 0 ? (amount / totalExpense) * 100 : 0;
+                        return (
+                          <div key={index} className="space-y-1.5">
+                            <div className="flex justify-between text-xs font-semibold">
+                              <span className="text-white">{catName}</span>
+                              <span className="text-slate-400">{formatCurrency(amount)} ({percentage.toFixed(1)}%)</span>
+                            </div>
+                            <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                              <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(100, (amount / maxCategoryAmount) * 100)}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-sm py-4">Nenhuma despesa registada.</p>
+                  )}
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-emerald-400" /> Comparativo de Fluxo
+                  </h3>
+                  <div className="space-y-4 py-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">Entradas Realizadas</span>
+                      <span className="text-emerald-400 font-bold">{formatCurrency(totalIncome)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">Saídas Realizadas</span>
+                      <span className="text-rose-400 font-bold">{formatCurrency(totalExpense)}</span>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center mt-4">
+                      <div>
+                        <p className="text-xs uppercase font-bold text-slate-400">Resultado Líquido</p>
+                        <p className={`text-lg font-black ${totalIncome - totalExpense >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {formatCurrency(totalIncome - totalExpense)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -462,7 +516,7 @@ export default function DashboardPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <h2 className="text-2xl font-extrabold text-white">Metas & Objetivos de Investimento</h2>
-                  <p className="text-slate-400 text-sm">Defina objetivos e distribua o valor automaticamente nas contas a pagar.</p>
+                  <p className="text-slate-400 text-sm">Defina objetivos e distribua o valor automaticamente nas contas a pagar na categoria "Investimento".</p>
                 </div>
                 <button
                   onClick={() => setIsGoalModalOpen(true)}
@@ -473,29 +527,27 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {transactions.filter(t => t.description.startsWith('Objetivo:')).length > 0 ? (
-                  transactions
-                    .filter(t => t.description.startsWith('Objetivo:'))
-                    .map(t => (
-                      <div key={t.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-lg font-bold text-white">{t.description}</p>
-                            <p className="text-xs text-slate-400 mt-1">Vencimento da Parcela: {t.due_date}</p>
-                          </div>
-                          <Trophy className="w-8 h-8 text-emerald-400" />
+                {goals.length > 0 ? (
+                  goals.map(g => (
+                    <div key={g.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-lg font-bold text-white">{g.title}</p>
+                          <p className="text-xs text-slate-400 mt-1">Prazo: {g.months} meses</p>
                         </div>
-                        <div className="border-t border-slate-800 pt-4 flex justify-between items-center">
-                          <div>
-                            <p className="text-slate-400 text-xs uppercase">Valor da Parcela</p>
-                            <p className="font-black text-white text-lg">{formatCurrency(t.amount)}</p>
-                          </div>
-                          <span className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl font-bold">
-                            Parcela {t.installment_number}/{t.total_installments}
-                          </span>
-                        </div>
+                        <Trophy className="w-8 h-8 text-emerald-400" />
                       </div>
-                    ))
+                      <div className="border-t border-slate-800 pt-4 flex justify-between items-center">
+                        <div>
+                          <p className="text-slate-400 text-xs uppercase">Valor Total Desejado</p>
+                          <p className="font-black text-white text-lg">{formatCurrency(g.target_amount)}</p>
+                        </div>
+                        <span className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl font-bold">
+                          {formatCurrency(Number(g.target_amount) / Number(g.months))} / mês
+                        </span>
+                      </div>
+                    </div>
+                  ))
                 ) : (
                   <div className="col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
                     <Target className="w-12 h-12 text-slate-600 mx-auto" />
@@ -569,7 +621,7 @@ export default function DashboardPage() {
                       <div key={t.id} className="py-4 flex justify-between items-center">
                         <div>
                           <p className="font-bold text-white">{t.description}</p>
-                          <p className="text-xs text-slate-400">Vencimento: {t.due_date} {t.total_installments > 1 ? `(${t.installment_number}/${t.total_installments})` : ''}</p>
+                          <p className="text-xs text-slate-400">Vencimento: {t.due_date} {t.total_installments > 1 ? `(${t.installment_number}/${t.total_installments})` : ''} • Categoria: {t.category_name || 'Geral'}</p>
                         </div>
                         <span className="text-rose-400 font-bold">{formatCurrency(t.amount)}</span>
                       </div>
@@ -619,7 +671,7 @@ export default function DashboardPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
             <button onClick={() => setIsGoalModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
             <h3 className="text-2xl font-extrabold text-white mb-2">Novo Objetivo / Meta</h3>
-            <p className="text-xs text-slate-400 mb-6">O valor total será dividido automaticamente nas suas Contas a Pagar mensais.</p>
+            <p className="text-xs text-slate-400 mb-6">O valor total será dividido automaticamente nas suas Contas a Pagar na categoria "Investimento".</p>
 
             <form onSubmit={handleSaveGoal} className="space-y-4">
               <div>
