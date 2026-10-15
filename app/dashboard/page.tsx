@@ -227,7 +227,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Cadastrar Objetivo/Meta e lançar automaticamente nas Contas a Pagar com todos os campos obrigatórios preenchidos
+  // Cadastrar Objetivo/Meta e lançar automaticamente nas Contas a Pagar
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!goalTitle || !goalTargetAmount || !goalMonths) return;
@@ -247,7 +247,7 @@ export default function DashboardPage() {
     try {
       const totalVal = Number(goalTargetAmount.toString().replace(',', '.'));
       const monthsCount = Number(goalMonths) || 1;
-      const today = new Date().toISOString().split 'T'[0];
+      const today = new Date().toISOString().split('T')[0];
 
       const txPayload = {
         family_id: resolvedFamilyId,
@@ -292,7 +292,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
         <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
-        <p className="text-slate-400 font-medium">Carregando inteligência financeira...</p>
+        <p className="text-slate-400 font-medium">A carregar inteligência financeira...</p>
       </div>
     );
   }
@@ -584,7 +584,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-slate-400 text-sm py-4">Nenhuma conta a pagar registrada.</p>
+                  <p className="text-slate-400 text-sm py-4">Nenhuma conta a pagar registada.</p>
                 )}
               </div>
             </div>
@@ -612,7 +612,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-slate-400 text-sm py-4">Nenhuma conta a receber registrada.</p>
+                  <p className="text-slate-400 text-sm py-4">Nenhuma conta a receber registada.</p>
                 )}
               </div>
             </div>
