@@ -20,29 +20,29 @@ import {
   FileText,
   DollarSign,
   TrendingUp,
-  Layers,
-  FolderKanban
+  Layers
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
 
-  // Módulos Principais (Header Superior)
+  // Módulos Superiores (Header)
   const [activeModule, setActiveModule] = useState<'cadastros' | 'pagar' | 'receber' | 'investimentos'>('cadastros');
-  // Submenus da Sidebar Esquerda
-  const [activeSubMenu, setActiveSubMenu] = useState<'geral' | 'cartoes' | 'contas' | 'categorias' | 'metas'>('geral');
+  // Submenus da Sidebar Esquerda de acordo com o módulo ativo
+  const [activeSubMenu, setActiveSubMenu] = useState<string>('geral');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Estados de Dados
-  const [summary, setSummary] = useState<any>(null);
-  const [categoriesList, setCategoriesList] = useState<any[]>([]);
-  const [accountsList, setAccountsList] = useState<any[]>([]);
-  const [cardsList, setCardsList] = useState<any[]>([]);
-  const [transactionsList, setTransactionsList] = useState<any[]>([]);
+  // Estados de Dados da API
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [creditCards, setCreditCards] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [goals, setGoals] = useState<any[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [userName, setUserName] = useState('Família');
-  const [familyId, setFamilyId] = useState<number | null>(null);
+  const [familyId, setFamilyId] = useState<string | number>('1');
 
   // Modal de Novo Cartão de Crédito
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -62,45 +62,32 @@ export default function DashboardPage() {
       return;
     }
 
-    let currentFamilyId = 1;
+    let currentFamilyId = '1';
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
         setUserName(user.name || 'Família');
-        currentFamilyId = user.family_id || 1;
+        currentFamilyId = String(user.family_id || '1');
         setFamilyId(currentFamilyId);
       } catch (e) {}
     }
 
     try {
-      const [sumRes, dataRes, cardsRes] = await Promise.all([
-        fetch('https://finanfamily-api.onrender.com/api/dashboard/summary', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('https://finanfamily-api.onrender.com/api/dashboard/data', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [accRes, catRes, cardRes, txRes, goalRes] = await Promise.all([
+        fetch(`https://finanfamily-api.onrender.com/api/accounts?family_id=${currentFamilyId}`),
+        fetch(`https://finanfamily-api.onrender.com/api/categories?family_id=${currentFamilyId}`),
         fetch(`https://finanfamily-api.onrender.com/api/credit-cards?family_id=${currentFamilyId}`),
+        fetch(`https://finanfamily-api.onrender.com/api/transactions?family_id=${currentFamilyId}`),
+        fetch(`https://finanfamily-api.onrender.com/api/goals?family_id=${currentFamilyId}`),
       ]);
 
-      if (sumRes.status === 401 || sumRes.status === 403) {
-        localStorage.removeItem('@FinanFamily:token');
-        router.push('/login');
-        return;
-      }
-
-      if (sumRes.ok) setSummary(await sumRes.json());
-      if (dataRes.ok) {
-        const d = await dataRes.json();
-        setCategoriesList(d.categories || []);
-        setAccountsList(d.accounts || []);
-        setTransactionsList(d.transactions || []);
-      }
-      if (cardsRes.ok) {
-        setCardsList(await cardsRes.json());
-      }
+      if (accRes.ok) setAccounts(await accRes.json());
+      if (catRes.ok) setCategories(await catRes.json());
+      if (cardRes.ok) setCreditCards(await cardRes.json());
+      if (txRes.ok) setTransactions(await txRes.json());
+      if (goalRes.ok) setGoals(await goalRes.json());
     } catch (err) {
-      setError('Erro de conexão com o servidor.');
+      setError('Erro de conexão ao carregar dados do servidor.');
     } finally {
       setLoading(false);
     }
@@ -115,7 +102,7 @@ export default function DashboardPage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(isNaN(n) ? 0 : n);
   };
 
-  // Cadastrar Cartão de Crédito usando a rota original
+  // Cadastrar Cartão de Crédito usando a API real
   const handleSaveCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cardName || !cardBrand || !cardLimit) return;
@@ -126,7 +113,7 @@ export default function DashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          family_id: familyId || 1,
+          family_id: familyId,
           name: cardName,
           brand: cardBrand,
           total_limit: cardLimit,
@@ -156,10 +143,15 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
         <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
-        <p className="text-slate-400 font-medium">Carregando painel...</p>
+        <p className="text-slate-400 font-medium">Carregando painel financeiro...</p>
       </div>
     );
   }
+
+  // Cálculos rápidos para o resumo geral
+  const totalBalance = accounts.reduce((acc, curr) => acc + Number(curr.current_balance || 0), 0);
+  const totalIncome = transactions.filter(t => t.type === 'INCOME' && t.status === 'PAID').reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+  const totalExpense = transactions.filter(t => t.type === 'EXPENSE' && t.status === 'PAID').reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col font-sans">
@@ -167,7 +159,7 @@ export default function DashboardPage() {
       {/* ================= HEADER SUPERIOR (MÓDULOS PRINCIPAIS) ================= */}
       <header className="bg-slate-900 border-b border-slate-800 h-20 px-6 flex items-center justify-between z-30">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/25 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
             <Wallet className="w-6 h-6" />
           </div>
           <span className="font-extrabold text-xl text-white tracking-tight">
@@ -175,7 +167,7 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        {/* Módulos como Header */}
+        {/* Módulos Superiores */}
         <nav className="hidden md:flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
           <button
             onClick={() => { setActiveModule('cadastros'); setActiveSubMenu('geral'); }}
@@ -186,7 +178,7 @@ export default function DashboardPage() {
             Cadastros
           </button>
           <button
-            onClick={() => { setActiveModule('pagar'); setActiveSubMenu('contas'); }}
+            onClick={() => { setActiveModule('pagar'); setActiveSubMenu('contas_pagar'); }}
             className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
               activeModule === 'pagar' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
             }`}
@@ -194,7 +186,7 @@ export default function DashboardPage() {
             Contas a Pagar
           </button>
           <button
-            onClick={() => { setActiveModule('receber'); setActiveSubMenu('contas'); }}
+            onClick={() => { setActiveModule('receber'); setActiveSubMenu('contas_receber'); }}
             className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
               activeModule === 'receber' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
             }`}
@@ -202,7 +194,7 @@ export default function DashboardPage() {
             Contas a Receber
           </button>
           <button
-            onClick={() => { setActiveModule('investimentos'); setActiveSubMenu('geral'); }}
+            onClick={() => { setActiveModule('investimentos'); setActiveSubMenu('metas'); }}
             className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
               activeModule === 'investimentos' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
             }`}
@@ -221,10 +213,10 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* ================= CORPO PRINCIPAL COM SIDEBAR ESQUERDA ================= */}
+      {/* ================= CORPO PRINCIPAL COM SIDEBAR LATERAL ================= */}
       <div className="flex flex-1 min-h-[calc(100vh-5rem)]">
         
-        {/* SIDEBAR ESQUERDA (MENUS DOS MÓDULOS) */}
+        {/* SIDEBAR ESQUERDA (MENUS ESPECÍFICOS DO MÓDULO ATIVO) */}
         <aside className={`fixed md:static inset-y-0 left-0 z-20 w-64 bg-slate-900/60 border-r border-slate-800 flex flex-col p-4 space-y-2 transition-transform ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800 md:hidden">
             <span className="font-bold text-white">Menu</span>
@@ -233,6 +225,7 @@ export default function DashboardPage() {
 
           <p className="text-xs uppercase font-extrabold text-slate-500 px-3 pb-1">Menus do Módulo</p>
 
+          {/* MENUS DO MÓDULO: CADASTROS */}
           {activeModule === 'cadastros' && (
             <>
               <button onClick={() => setActiveSubMenu('geral')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'geral' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
@@ -241,38 +234,44 @@ export default function DashboardPage() {
               <button onClick={() => setActiveSubMenu('cartoes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'cartoes' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
                 <CreditCard className="w-5 h-5" /> Cartões de Crédito
               </button>
+              <button onClick={() => setActiveSubMenu('contas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
+                <Wallet className="w-5 h-5" /> Contas Bancárias
+              </button>
               <button onClick={() => setActiveSubMenu('categorias')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'categorias' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
-                <Layers className="w-5 h-5" /> Categorias & Contas
+                <Layers className="w-5 h-5" /> Categorias
               </button>
             </>
           )}
 
+          {/* MENUS DO MÓDULO: CONTAS A PAGAR */}
           {activeModule === 'pagar' && (
             <>
-              <button onClick={() => setActiveSubMenu('contas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
-                <FileText className="w-5 h-5" /> Contas a Pagar
+              <button onClick={() => setActiveSubMenu('contas_pagar')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
+                <FileText className="w-5 h-5" /> Lançamentos a Pagar
               </button>
             </>
           )}
 
+          {/* MENUS DO MÓDULO: CONTAS A RECEBER */}
           {activeModule === 'receber' && (
             <>
-              <button onClick={() => setActiveSubMenu('contas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
-                <DollarSign className="w-5 h-5" /> Contas a Receber
+              <button onClick={() => setActiveSubMenu('contas_receber')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
+                <DollarSign className="w-5 h-5" /> Lançamentos a Receber
               </button>
             </>
           )}
 
+          {/* MENUS DO MÓDULO: INVESTIMENTOS */}
           {activeModule === 'investimentos' && (
             <>
-              <button onClick={() => setActiveSubMenu('geral')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'geral' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
-                <TrendingUp className="w-5 h-5" /> Carteira de Ativos
+              <button onClick={() => setActiveSubMenu('metas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
+                <Target className="w-5 h-5" /> Metas & Objetivos
               </button>
             </>
           )}
         </aside>
 
-        {/* CONTEÚDO DINÂMICO DOS MÓDULOS */}
+        {/* CONTEÚDO PRINCIPAL EXIBIDO */}
         <main className="flex-1 p-6 md:p-10 max-w-5xl mx-auto space-y-8">
           
           {error && (
@@ -281,7 +280,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* MÓDULO: CADASTROS -> CARTÕES */}
+          {/* SUBMENU: CADASTROS -> CARTÕES */}
           {activeModule === 'cadastros' && activeSubMenu === 'cartoes' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
@@ -298,7 +297,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {cardsList.map((card) => (
+                {creditCards.map((card) => (
                   <div key={card.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
                     <div className="flex justify-between items-start">
                       <div>
@@ -325,26 +324,58 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* MÓDULO: CADASTROS -> GERAL / DASHBOARD */}
+          {/* SUBMENU: CADASTROS -> GERAL */}
           {activeModule === 'cadastros' && activeSubMenu === 'geral' && (
             <div className="space-y-8">
               <div>
                 <h1 className="text-3xl font-extrabold text-white">Olá, {userName}!</h1>
-                <p className="text-slate-400 text-sm mt-1">Painel principal e indicadores gerais.</p>
+                <p className="text-slate-400 text-sm mt-1">Visão geral do painel financeiro familiar.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
-                  <p className="text-xs uppercase font-semibold text-slate-400 mb-1">Saldo em Contas</p>
-                  <p className="text-3xl font-black text-white">{formatCurrency(summary?.balance)}</p>
+                  <p className="text-xs uppercase font-semibold text-slate-400 mb-1">Saldo Total em Contas</p>
+                  <p className="text-3xl font-black text-white">{formatCurrency(totalBalance)}</p>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
-                  <p className="text-xs uppercase font-semibold text-slate-400 mb-1">Receitas do Mês</p>
-                  <p className="text-3xl font-black text-emerald-400">{formatCurrency(summary?.income)}</p>
+                  <p className="text-xs uppercase font-semibold text-slate-400 mb-1">Receitas Realizadas</p>
+                  <p className="text-3xl font-black text-emerald-400">{formatCurrency(totalIncome)}</p>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
-                  <p className="text-xs uppercase font-semibold text-slate-400 mb-1">Despesas do Mês</p>
-                  <p className="text-3xl font-black text-rose-400">{formatCurrency(summary?.expense)}</p>
+                  <p className="text-xs uppercase font-semibold text-slate-400 mb-1">Despesas Realizadas</p>
+                  <p className="text-3xl font-black text-rose-400">{formatCurrency(totalExpense)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SUBMENU: CADASTROS -> CONTAS BANCÁRIAS */}
+          {activeModule === 'cadastros' && activeSubMenu === 'contas' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-extrabold text-white">Contas Bancárias</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {accounts.map(acc => (
+                  <div key={acc.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
+                    <p className="font-bold text-white text-lg">{acc.name}</p>
+                    <p className="text-emerald-400 font-black text-xl mt-2">{formatCurrency(acc.current_balance)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SUBMENU: CADASTROS -> CATEGORIAS */}
+          {activeModule === 'cadastros' && activeSubMenu === 'categorias' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-extrabold text-white">Categorias Cadastradas</h2>
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                <div className="divide-y divide-slate-800">
+                  {categories.map(cat => (
+                    <div key={cat.id} className="py-3 flex justify-between items-center">
+                      <span className="text-white font-medium">{cat.name}</span>
+                      <span className="text-xs uppercase bg-slate-800 text-slate-300 px-3 py-1 rounded-md">{cat.flow_type}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -355,13 +386,13 @@ export default function DashboardPage() {
             <div className="space-y-6">
               <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-                {transactionsList.filter(t => t.type === 'expense').length > 0 ? (
+                {transactions.filter(t => t.type === 'EXPENSE').length > 0 ? (
                   <div className="divide-y divide-slate-800">
-                    {transactionsList.filter(t => t.type === 'expense').map(t => (
+                    {transactions.filter(t => t.type === 'EXPENSE').map(t => (
                       <div key={t.id} className="py-4 flex justify-between items-center">
                         <div>
                           <p className="font-bold text-white">{t.description}</p>
-                          <p className="text-xs text-slate-400">Vencimento: {t.due_date || t.date}</p>
+                          <p className="text-xs text-slate-400">Vencimento: {t.due_date} • Status: {t.status}</p>
                         </div>
                         <span className="text-rose-400 font-bold">{formatCurrency(t.amount)}</span>
                       </div>
@@ -379,13 +410,13 @@ export default function DashboardPage() {
             <div className="space-y-6">
               <h2 className="text-2xl font-extrabold text-white">Contas a Receber</h2>
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-                {transactionsList.filter(t => t.type === 'income').length > 0 ? (
+                {transactions.filter(t => t.type === 'INCOME').length > 0 ? (
                   <div className="divide-y divide-slate-800">
-                    {transactionsList.filter(t => t.type === 'income').map(t => (
+                    {transactions.filter(t => t.type === 'INCOME').map(t => (
                       <div key={t.id} className="py-4 flex justify-between items-center">
                         <div>
                           <p className="font-bold text-white">{t.description}</p>
-                          <p className="text-xs text-slate-400">Data: {t.date}</p>
+                          <p className="text-xs text-slate-400">Data: {t.transaction_date} • Status: {t.status}</p>
                         </div>
                         <span className="text-emerald-400 font-bold">{formatCurrency(t.amount)}</span>
                       </div>
@@ -400,9 +431,25 @@ export default function DashboardPage() {
 
           {/* MÓDULO: INVESTIMENTOS */}
           {activeModule === 'investimentos' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center shadow-xl">
-              <h2 className="text-2xl font-bold text-white mb-2">Módulo de Investimentos</h2>
-              <p className="text-slate-400 text-sm">Controle sua carteira de ativos e rentabilidade familiar.</p>
+            <div className="space-y-6">
+              <h2 className="text-2xl font-extrabold text-white">Metas & Investimentos</h2>
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                {goals.length > 0 ? (
+                  <div className="space-y-4">
+                    {goals.map(g => (
+                      <div key={g.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-white">{g.title}</p>
+                          <p className="text-xs text-slate-400 mt-1">Alvo: {formatCurrency(g.target_amount)}</p>
+                        </div>
+                        <span className="text-emerald-400 font-black">{formatCurrency(g.current_amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 text-sm py-4">Nenhum objetivo de investimento cadastrado.</p>
+                )}
+              </div>
             </div>
           )}
 
@@ -413,18 +460,18 @@ export default function DashboardPage() {
       {isCardModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
-            <button onClick={() => setIsCardModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white"><X className="w-6 h-6" /></button>
+            <button onClick={() => setIsCardModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
             <h3 className="text-2xl font-extrabold text-white mb-6">Cadastrar Cartão</h3>
 
             <form onSubmit={handleSaveCard} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Nome do Cartão</label>
-                <input type="text" required placeholder="Ex: Nubank Ultravioleta" value={cardName} onChange={e => setCardName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                <input type="text" required placeholder="Ex: Nubank" value={cardName} onChange={e => setCardName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Bandeira</label>
-                <input type="text" required placeholder="Ex: Mastercard, Visa" value={cardBrand} onChange={e => setCardBrand(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                <input type="text" required placeholder="Ex: Mastercard" value={cardBrand} onChange={e => setCardBrand(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
 
               <div>
