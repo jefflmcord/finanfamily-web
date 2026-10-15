@@ -4,8 +4,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
   Loader2,
   PlusCircle,
   CreditCard,
@@ -16,12 +14,11 @@ import {
   CheckCircle2,
   FileText,
   DollarSign,
-  TrendingUp,
   Layers,
   Sparkles,
-  ShieldAlert,
   PieChart as PieIcon,
-  BarChart3
+  BarChart3,
+  Trophy
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -68,6 +65,13 @@ export default function DashboardPage() {
   const [cardClosingDay, setCardClosingDay] = useState('10');
   const [cardDueDay, setCardDueDay] = useState('17');
   const [savingCard, setSavingCard] = useState(false);
+
+  // Modal de Novo Objetivo / Meta de Investimento
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [goalTitle, setGoalTitle] = useState('');
+  const [goalTargetAmount, setGoalTargetAmount] = useState('');
+  const [goalMonths, setGoalMonths] = useState('12');
+  const [savingGoal, setSavingGoal] = useState(false);
 
   const fetchData = useCallback(async () => {
     const token = localStorage.getItem('@FinanFamily:token');
@@ -223,6 +227,68 @@ export default function DashboardPage() {
     }
   };
 
+  // Cadastrar Objetivo/Meta e lançar automaticamente nas Contas a Pagar parcelado
+  const handleSaveGoal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!goalTitle || !goalTargetAmount || !goalMonths) return;
+
+    let resolvedFamilyId = Number(familyId || 1);
+    const userStr = localStorage.getItem('@FinanFamily:user');
+    if (userStr) {
+      try {
+        const userObj = JSON.parse(userStr);
+        resolvedFamilyId = Number(userObj.family_id || userObj.familyId || familyId || 1);
+      } catch (e) {}
+    }
+
+    setSavingGoal(true);
+    setError('');
+
+    try {
+      const totalVal = Number(goalTargetAmount.toString().replace(',', '.'));
+      const monthsCount = Number(goalMonths) || 1;
+      const today = new Date().toISOString().split('T')[0];
+
+      // 1. Criar a transação parcelada nas Contas a Pagar representando o objetivo
+      const txPayload = {
+        family_id: resolvedFamilyId,
+        description: `Objetivo: ${goalTitle.trim()}`,
+        amount: totalVal,
+        type: 'EXPENSE',
+        payment_method: 'BOLETO',
+        account_id: accounts.length > 0 ? accounts[0].id : null,
+        credit_card_id: null,
+        category_id: null,
+        transaction_date: today,
+        due_date: today,
+        total_installments: monthsCount,
+        start_installment: 1,
+        status: 'PENDING'
+      };
+
+      const resTx = await fetch('https://finanfamily-api.onrender.com/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(txPayload),
+      });
+
+      if (resTx.ok) {
+        setIsGoalModalOpen(false);
+        setGoalTitle('');
+        setGoalTargetAmount('');
+        setGoalMonths('12');
+        await fetchData();
+      } else {
+        const errData = await resTx.json();
+        setError(errData.error || 'Erro ao gerar lançamentos do objetivo nas contas a pagar.');
+      }
+    } catch (err) {
+      setError('Erro de conexão ao salvar objetivo.');
+    } finally {
+      setSavingGoal(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
@@ -232,15 +298,12 @@ export default function DashboardPage() {
     );
   }
 
-  // Cálculos Inteligentes para o Dashboard
   const totalBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance || curr.current_balance || 0), 0);
   const totalIncome = transactions.filter(t => t.type === 'INCOME' && t.status === 'PAID').reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
   const totalExpense = transactions.filter(t => t.type === 'EXPENSE' && t.status === 'PAID').reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
-  
-  // Taxa de Poupança
   const savingsRate = totalIncome > 0 ? Math.max(0, ((totalIncome - totalExpense) / totalIncome) * 100) : 0;
 
-  // Agrupamento de despesas por categoria para o Gráfico de Pizza inteligente
+  // Despesas por Categoria
   const expensesByCategory: { [key: string]: number } = {};
   transactions
     .filter(t => t.type === 'EXPENSE')
@@ -249,31 +312,13 @@ export default function DashboardPage() {
       expensesByCategory[catName] = (expensesByCategory[catName] || 0) + Number(t.amount || 0);
     });
 
-  const sortedCategories = Object.entries(expensesByCategory)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4); // Top 4 categorias
-
+  const sortedCategories = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1]).slice(0, 4);
   const maxCategoryAmount = sortedCategories.length > 0 ? sortedCategories[0][1] : 1;
 
-  // Insights Inteligentes Automáticos
-  const getSmartInsights = () => {
-    const list = [];
-    if (totalIncome === 0 && totalExpense === 0) {
-      list.push({ title: 'Comece a registar', desc: 'Adicione suas receitas e despesas para desbloquear análises de inteligência financeira.', type: 'info' });
-    } else if (savingsRate >= 20) {
-      list.push({ title: 'Excelente Taxa de Poupança! 🎉', desc: `Vocês estão a poupar ${savingsRate.toFixed(10).slice(0, 4)}% das receitas. Continue assim para atingir suas metas mais rápido.`, type: 'success' });
-    } else if (totalExpense > totalIncome) {
-      list.push({ title: 'Atenção ao Orçamento ⚠️', desc: 'As despesas deste período superaram as receitas. Revise os gastos supérfluos.', type: 'danger' });
-    } else {
-      list.push({ title: 'Equilíbrio Financeiro 💡', desc: `Sua taxa de poupança atual é de ${savingsRate.toFixed(1)}%. Tente elevar para 20% otimizando custos fixos.`, type: 'warning' });
-    }
-    if (creditCards.length === 0) {
-      list.push({ title: 'Cartões não cadastrados', desc: 'Adicione seus cartões de crédito em Cadastros para gerenciar faturas e fechamentos automaticamente.', type: 'info' });
-    }
-    return list;
-  };
-
-  const smartInsights = getSmartInsights();
+  const smartInsights = [
+    { title: 'Taxa de Poupança', desc: `Vocês poupam atualmente ${savingsRate.toFixed(1)}% das receitas mensais.` },
+    { title: 'Planejamento de Metas', desc: 'Utilize a aba Investimentos para cadastrar objetivos de longo prazo com divisão automática.' }
+  ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col font-sans">
@@ -342,7 +387,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* ================= CORPO PRINCIPAL COM SIDEBAR LATERAL ================= */}
+      {/* ================= CORPO COM SIDEBAR ================= */}
       <div className="flex flex-1 min-h-[calc(100vh-5rem)]">
         
         {/* SIDEBAR ESQUERDA */}
@@ -372,27 +417,21 @@ export default function DashboardPage() {
           )}
 
           {activeModule === 'pagar' && (
-            <>
-              <button onClick={() => setActiveSubMenu('contas_pagar')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
-                <FileText className="w-5 h-5" /> Lançamentos a Pagar
-              </button>
-            </>
+            <button onClick={() => setActiveSubMenu('contas_pagar')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
+              <FileText className="w-5 h-5" /> Lançamentos a Pagar
+            </button>
           )}
 
           {activeModule === 'receber' && (
-            <>
-              <button onClick={() => setActiveSubMenu('contas_receber')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
-                <DollarSign className="w-5 h-5" /> Lançamentos a Receber
-              </button>
-            </>
+            <button onClick={() => setActiveSubMenu('contas_receber')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
+              <DollarSign className="w-5 h-5" /> Lançamentos a Receber
+            </button>
           )}
 
           {activeModule === 'investimentos' && (
-            <>
-              <button onClick={() => setActiveSubMenu('metas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
-                <Target className="w-5 h-5" /> Metas & Objetivos
-              </button>
-            </>
+            <button onClick={() => setActiveSubMenu('metas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400 hover:text-white'}`}>
+              <Target className="w-5 h-5" /> Metas & Objetivos
+            </button>
           )}
         </aside>
 
@@ -405,76 +444,40 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* SUBMENU: CADASTROS -> GERAL (DASHBOARD INTELIGENTE) */}
+          {/* SUBMENU: CADASTROS -> GERAL */}
           {activeModule === 'cadastros' && activeSubMenu === 'geral' && (
             <div className="space-y-8">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <h1 className="text-3xl font-extrabold text-white">Olá, {userName}! 👋</h1>
-                  <p className="text-slate-400 text-sm mt-1">Aqui está o raio-x inteligente da saúde financeira da sua família.</p>
-                </div>
-                <div className="bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-emerald-400 text-xs font-bold shadow-sm">
-                  <Sparkles className="w-4 h-4" /> Inteligência Ativa FinanFamily
-                </div>
+              <div>
+                <h1 className="text-3xl font-extrabold text-white">Olá, {userName}! 👋</h1>
+                <p className="text-slate-400 text-sm mt-1">Raio-x inteligente da saúde financeira da sua família.</p>
               </div>
 
-              {/* CARDS DE INDICADORES PRINCIPAIS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-2">
                   <p className="text-xs uppercase font-bold text-slate-400">Saldo em Contas</p>
                   <p className="text-2xl font-black text-white">{formatCurrency(totalBalance)}</p>
-                  <p className="text-[11px] text-slate-500">Patrimônio líquido imediato</p>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-2">
                   <p className="text-xs uppercase font-bold text-slate-400">Receitas do Mês</p>
                   <p className="text-2xl font-black text-emerald-400">{formatCurrency(totalIncome)}</p>
-                  <p className="text-[11px] text-slate-500">Total liquidado no período</p>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-2">
                   <p className="text-xs uppercase font-bold text-slate-400">Despesas do Mês</p>
                   <p className="text-2xl font-black text-rose-400">{formatCurrency(totalExpense)}</p>
-                  <p className="text-[11px] text-slate-500">Saídas efetuadas no período</p>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-2">
                   <p className="text-xs uppercase font-bold text-slate-400">Taxa de Poupança</p>
                   <p className={`text-2xl font-black ${savingsRate >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {savingsRate.toFixed(1)}%
                   </p>
-                  <p className="text-[11px] text-slate-500">Meta ideal: acima de 20%</p>
                 </div>
               </div>
 
-              {/* SEÇÃO DE INSIGHTS INTELIGENTES */}
-              <div className="bg-gradient-to-r from-slate-900 to-slate-900/80 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-lg font-bold text-white">Insights & Conselhos Financeiros</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {smartInsights.map((insight, idx) => (
-                    <div key={idx} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-1">
-                      <p className="font-bold text-white text-sm flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span> {insight.title}
-                      </p>
-                      <p className="text-xs text-slate-400 leading-relaxed">{insight.desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* GRÁFICOS VISUAIS INTELIGENTES */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Gráfico / Distribuição por Categorias */}
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      <PieIcon className="w-5 h-5 text-emerald-400" /> Maiores Despesas por Categoria
-                    </h3>
-                  </div>
-
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <PieIcon className="w-5 h-5 text-emerald-400" /> Maiores Despesas por Categoria
+                  </h3>
                   {sortedCategories.length > 0 ? (
                     <div className="space-y-4">
                       {sortedCategories.map(([catName, amount], index) => {
@@ -486,114 +489,113 @@ export default function DashboardPage() {
                               <span className="text-slate-400">{formatCurrency(amount)} ({percentage.toFixed(1)}%)</span>
                             </div>
                             <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
-                              <div
-                                className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                                style={{ width: `${Math.min(100, (amount / maxCategoryAmount) * 100)}%` }}
-                              ></div>
+                              <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(100, (amount / maxCategoryAmount) * 100)}%` }}></div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   ) : (
-                    <p className="text-slate-400 text-sm py-8 text-center">Nenhuma despesa categorizada registada ainda.</p>
+                    <p className="text-slate-400 text-sm py-4">Nenhuma despesa registada.</p>
                   )}
                 </div>
 
-                {/* Balanço Visual Entradas vs Saídas */}
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-emerald-400" /> Comparativo de Fluxo
-                    </h3>
-                  </div>
-
-                  <div className="space-y-6 py-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-300 font-medium">Entradas Realizadas</span>
-                        <span className="text-emerald-400 font-bold">{formatCurrency(totalIncome)}</span>
-                      </div>
-                      <div className="w-full bg-slate-950 h-4 rounded-full overflow-hidden border border-slate-800">
-                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: '100%' }}></div>
-                      </div>
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-emerald-400" /> Comparativo de Fluxo
+                  </h3>
+                  <div className="space-y-4 py-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">Entradas Realizadas</span>
+                      <span className="text-emerald-400 font-bold">{formatCurrency(totalIncome)}</span>
                     </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-300 font-medium">Saídas Realizadas</span>
-                        <span className="text-rose-400 font-bold">{formatCurrency(totalExpense)}</span>
-                      </div>
-                      <div className="w-full bg-slate-950 h-4 rounded-full overflow-hidden border border-slate-800">
-                        <div
-                          className="bg-rose-500 h-full rounded-full"
-                          style={{ width: `${totalIncome > 0 ? Math.min(100, (totalExpense / totalIncome) * 100) : 0}%` }}
-                        ></div>
-                      </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">Saídas Realizadas</span>
+                      <span className="text-rose-400 font-bold">{formatCurrency(totalExpense)}</span>
                     </div>
-
-                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center mt-4">
                       <div>
-                        <p className="text-xs uppercase font-bold text-slate-400">Resultado Líquido do Período</p>
+                        <p className="text-xs uppercase font-bold text-slate-400">Resultado Líquido</p>
                         <p className={`text-lg font-black ${totalIncome - totalExpense >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {formatCurrency(totalIncome - totalExpense)}
                         </p>
                       </div>
-                      <ShieldAlert className={`w-8 h-8 ${totalIncome - totalExpense >= 0 ? 'text-emerald-400' : 'text-rose-400'}`} />
                     </div>
                   </div>
                 </div>
-
               </div>
-
             </div>
           )}
 
-          {/* SUBMENU: CADASTROS -> CARTÕES */}
-          {activeModule === 'cadastros' && activeSubMenu === 'cartoes' && (
+          {/* MÓDULO: INVESTIMENTOS (METAS & OBJETIVOS COM LANÇAMENTO AUTOMÁTICO) */}
+          {activeModule === 'investimentos' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <div>
-                  <h2 className="text-2xl font-extrabold text-white">Cartões de Crédito</h2>
-                  <p className="text-slate-400 text-sm">Gerencie limites, dias de fechamento e faturas.</p>
+                  <h2 className="text-2xl font-extrabold text-white">Metas & Objetivos de Investimento</h2>
+                  <p className="text-slate-400 text-sm">Defina objetivos e distribua o valor automaticamente nas contas a pagar.</p>
                 </div>
                 <button
-                  onClick={() => setIsCardModalOpen(true)}
+                  onClick={() => setIsGoalModalOpen(true)}
                   className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 px-5 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg"
                 >
-                  <PlusCircle className="w-5 h-5" /> Novo Cartão
+                  <PlusCircle className="w-5 h-5" /> Novo Objetivo
                 </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {creditCards.map((card) => (
-                  <div key={card.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-lg font-bold text-white">{card.name}</p>
-                        <span className="text-xs uppercase bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-md font-semibold">
-                          {card.brand}
-                        </span>
+                {transactions.filter(t => t.description.startsWith('Objetivo:')).length > 0 ? (
+                  transactions
+                    .filter(t => t.description.startsWith('Objetivo:'))
+                    .map(t => (
+                      <div key={t.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-lg font-bold text-white">{t.description}</p>
+                            <p className="text-xs text-slate-400 mt-1">Vencimento da Parcela: {t.due_date}</p>
+                          </div>
+                          <Trophy className="w-8 h-8 text-emerald-400" />
+                        </div>
+                        <div className="border-t border-slate-800 pt-4 flex justify-between items-center">
+                          <div>
+                            <p className="text-slate-400 text-xs uppercase">Valor da Parcela</p>
+                            <p className="font-black text-white text-lg">{formatCurrency(t.amount)}</p>
+                          </div>
+                          <span className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl font-bold">
+                            Parcela {t.installment_number}/{t.total_installments}
+                          </span>
+                        </div>
                       </div>
-                      <CreditCard className="w-8 h-8 text-emerald-400" />
-                    </div>
-                    <div className="border-t border-slate-800 pt-4 flex justify-between text-sm">
-                      <div>
-                        <p className="text-slate-400 text-xs uppercase">Limite Total</p>
-                        <p className="font-extrabold text-white text-base">{formatCurrency(card.total_limit)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-slate-400 text-xs uppercase">Fechamento / Venc.</p>
-                        <p className="font-bold text-slate-300">Dia {card.closing_day} / {card.due_day}</p>
-                      </div>
-                    </div>
+                    ))
+                ) : (
+                  <div className="col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
+                    <Target className="w-12 h-12 text-slate-600 mx-auto" />
+                    <p className="text-white font-bold text-lg">Nenhum objetivo cadastrado.</p>
+                    <p className="text-slate-400 text-sm">Clique em "+ Novo Objetivo" para começar a planear suas conquistas.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* DEMAIS MÓDULOS DE CADASTROS / PAGAR / RECEBER */}
+          {activeModule === 'cadastros' && activeSubMenu === 'cartoes' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-extrabold text-white">Cartões de Crédito</h2>
+                <button onClick={() => setIsCardModalOpen(true)} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl">+ Novo Cartão</button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {creditCards.map(c => (
+                  <div key={c.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
+                    <p className="text-lg font-bold text-white">{c.name}</p>
+                    <p className="text-slate-400 text-sm">Limite: {formatCurrency(c.total_limit)}</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* SUBMENU: CADASTROS -> CONTAS */}
           {activeModule === 'cadastros' && activeSubMenu === 'contas' && (
             <div className="space-y-6">
               <h2 className="text-2xl font-extrabold text-white">Contas Bancárias</h2>
@@ -608,7 +610,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* SUBMENU: CADASTROS -> CATEGORIAS */}
           {activeModule === 'cadastros' && activeSubMenu === 'categorias' && (
             <div className="space-y-6">
               <h2 className="text-2xl font-extrabold text-white">Categorias Cadastradas</h2>
@@ -625,12 +626,11 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* MÓDULO: CONTAS A PAGAR */}
           {activeModule === 'pagar' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
-                <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm cursor-pointer">
+                <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm">
                   + Adicionar Conta a Pagar
                 </button>
               </div>
@@ -641,7 +641,7 @@ export default function DashboardPage() {
                       <div key={t.id} className="py-4 flex justify-between items-center">
                         <div>
                           <p className="font-bold text-white">{t.description}</p>
-                          <p className="text-xs text-slate-400">Vencimento: {t.due_date} • Método: {t.payment_method} {t.installment_number ? `(${t.installment_number}/${t.total_installments})` : ''}</p>
+                          <p className="text-xs text-slate-400">Vencimento: {t.due_date} {t.total_installments > 1 ? `(${t.installment_number}/${t.total_installments})` : ''}</p>
                         </div>
                         <span className="text-rose-400 font-bold">{formatCurrency(t.amount)}</span>
                       </div>
@@ -654,12 +654,11 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* MÓDULO: CONTAS A RECEBER */}
           {activeModule === 'receber' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-extrabold text-white">Contas a Receber</h2>
-                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm cursor-pointer">
+                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm">
                   + Adicionar Conta a Receber
                 </button>
               </div>
@@ -683,48 +682,62 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* MÓDULO: INVESTIMENTOS */}
-          {activeModule === 'investimentos' && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-extrabold text-white">Metas & Investimentos</h2>
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-                {goals.length > 0 ? (
-                  <div className="space-y-4">
-                    {goals.map(g => (
-                      <div key={g.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-white">{g.title}</p>
-                          <p className="text-xs text-slate-400 mt-1">Alvo: {formatCurrency(g.target_amount)}</p>
-                        </div>
-                        <span className="text-emerald-400 font-black">{formatCurrency(g.current_amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-slate-400 text-sm py-4">Nenhum objetivo de investimento cadastrado.</p>
-                )}
-              </div>
-            </div>
-          )}
-
         </main>
       </div>
+
+      {/* ================= MODAL DE NOVO OBJETIVO / META ================= */}
+      {isGoalModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
+            <button onClick={() => setIsGoalModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
+            <h3 className="text-2xl font-extrabold text-white mb-2">Novo Objetivo / Meta</h3>
+            <p className="text-xs text-slate-400 mb-6">O valor total será dividido automaticamente nas suas Contas a Pagar mensais.</p>
+
+            <form onSubmit={handleSaveGoal} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Nome do Objetivo</label>
+                <input type="text" required placeholder="Ex: Carro Novo, Viagem, Reserva..." value={goalTitle} onChange={e => setGoalTitle(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Valor Total Desejado (R$)</label>
+                <input type="number" step="0.01" required placeholder="40000,00" value={goalTargetAmount} onChange={e => setGoalTargetAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Prazo em Meses (Parcelas)</label>
+                <input type="number" min="1" max="120" required value={goalMonths} onChange={e => setGoalMonths(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              </div>
+
+              {goalTargetAmount && goalMonths && Number(goalMonths) > 0 && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                  💡 Valor estimado por mês: {formatCurrency(Number(goalTargetAmount) / Number(goalMonths))} / mês
+                </div>
+              )}
+
+              <button type="submit" disabled={savingGoal} className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer">
+                {savingGoal ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-5 h-5" /> Criar Objetivo & Gerar Parcelas</>}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODAL DE NOVO LANÇAMENTO ================= */}
       {isTxModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative my-8">
             <button onClick={() => setIsTxModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
-            <h3 className="text-2xl font-extrabold text-white mb-6">Novo Lançamento / Conta</h3>
+            <h3 className="text-2xl font-extrabold text-white mb-6">Novo Lançamento</h3>
 
             <form onSubmit={handleSaveTransaction} className="space-y-4">
               <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-                <button type="button" onClick={() => setTxType('EXPENSE')} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'EXPENSE' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}>Contas a Pagar (Saída)</button>
-                <button type="button" onClick={() => setTxType('INCOME')} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber (Entrada)</button>
+                <button type="button" onClick={() => setTxType('EXPENSE')} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'EXPENSE' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}>Contas a Pagar</button>
+                <button type="button" onClick={() => setTxType('INCOME')} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber</button>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Descrição da Conta</label>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Descrição</label>
                 <input type="text" required placeholder="Ex: Aluguel, Supermercado..." value={txDescription} onChange={e => setTxDescription(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
 
@@ -734,7 +747,7 @@ export default function DashboardPage() {
                   <input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Forma de Pagamento</label>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Forma Pagamento</label>
                   <select value={txPaymentMethod} onChange={e => setTxPaymentMethod(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
                     <option value="BOLETO">Boleto / Pix / Dinheiro</option>
                     <option value="CARD">Cartão de Crédito</option>
@@ -742,19 +755,15 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {txPaymentMethod === 'CARD' && (
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-                  <div>
-                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Selecionar Cartão</label>
-                    <select value={txCardId} onChange={e => setTxCardId(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white">
-                      <option value="">Escolha o cartão...</option>
-                      {creditCards.map(c => <option key={c.id} value={c.id}>{c.name} (Fechamento dia {c.closing_day})</option>)}
-                    </select>
-                  </div>
+              {txPaymentMethod === 'CARD' ? (
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Cartão de Crédito</label>
+                  <select value={txCardId} onChange={e => setTxCardId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
+                    <option value="">Escolha o cartão...</option>
+                    {creditCards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
-              )}
-
-              {txPaymentMethod !== 'CARD' && (
+              ) : (
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Conta Bancária</label>
                   <select value={txAccountId} onChange={e => setTxAccountId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
@@ -766,7 +775,7 @@ export default function DashboardPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Total Parcelas</label>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Total de Parcelas</label>
                   <input type="number" min="1" max="48" value={txTotalInstallments} onChange={e => setTxTotalInstallments(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
                 </div>
                 <div>
@@ -786,14 +795,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Categoria</label>
-                <select value={txCategoryId} onChange={e => setTxCategoryId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
-                  <option value="">Selecione a categoria...</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-
               <button type="submit" disabled={savingTx} className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer">
                 {savingTx ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-5 h-5" /> Salvar Lançamento</>}
               </button>
@@ -802,7 +803,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* MODAL DE NOVO CARTÃO */}
+      {/* ================= MODAL DE CARTÃO ================= */}
       {isCardModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
@@ -814,28 +815,24 @@ export default function DashboardPage() {
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Nome do Cartão</label>
                 <input type="text" required placeholder="Ex: Nubank" value={cardName} onChange={e => setCardName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
-
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Bandeira</label>
                 <input type="text" required placeholder="Ex: Mastercard" value={cardBrand} onChange={e => setCardBrand(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
-
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Limite Total (R$)</label>
                 <input type="text" required placeholder="5000,00" value={cardLimit} onChange={e => setCardLimit(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Dia Fechamento</label>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Fechamento</label>
                   <input type="number" min="1" max="31" value={cardClosingDay} onChange={e => setCardClosingDay(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Dia Vencimento</label>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Vencimento</label>
                   <input type="number" min="1" max="31" value={cardDueDay} onChange={e => setCardDueDay(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
                 </div>
               </div>
-
               <button type="submit" disabled={savingCard} className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer">
                 {savingCard ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-5 h-5" /> Salvar Cartão</>}
               </button>
