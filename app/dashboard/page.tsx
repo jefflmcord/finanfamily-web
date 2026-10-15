@@ -146,7 +146,7 @@ export default function DashboardPage() {
         amount: Number(txAmount.toString().replace(',', '.')),
         type: txType,
         payment_method: txPaymentMethod,
-        account_id: txAccountId ? Number(txAccountId) : null,
+        account_id: txAccountId ? Number(txAccountId) : (accounts.length > 0 ? Number(accounts[0].id) : null),
         credit_card_id: txCardId ? Number(txCardId) : null,
         category_id: txCategoryId ? Number(txCategoryId) : null,
         transaction_date: txTransactionDate,
@@ -227,7 +227,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Cadastrar Objetivo/Meta e lançar automaticamente nas Contas a Pagar parcelado
+  // Cadastrar Objetivo/Meta e lançar automaticamente nas Contas a Pagar com todos os campos obrigatórios preenchidos
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!goalTitle || !goalTargetAmount || !goalMonths) return;
@@ -247,16 +247,15 @@ export default function DashboardPage() {
     try {
       const totalVal = Number(goalTargetAmount.toString().replace(',', '.'));
       const monthsCount = Number(goalMonths) || 1;
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split 'T'[0];
 
-      // 1. Criar a transação parcelada nas Contas a Pagar representando o objetivo
       const txPayload = {
         family_id: resolvedFamilyId,
         description: `Objetivo: ${goalTitle.trim()}`,
         amount: totalVal,
         type: 'EXPENSE',
         payment_method: 'BOLETO',
-        account_id: accounts.length > 0 ? accounts[0].id : null,
+        account_id: accounts.length > 0 ? Number(accounts[0].id) : null,
         credit_card_id: null,
         category_id: null,
         transaction_date: today,
@@ -303,7 +302,6 @@ export default function DashboardPage() {
   const totalExpense = transactions.filter(t => t.type === 'EXPENSE' && t.status === 'PAID').reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
   const savingsRate = totalIncome > 0 ? Math.max(0, ((totalIncome - totalExpense) / totalIncome) * 100) : 0;
 
-  // Despesas por Categoria
   const expensesByCategory: { [key: string]: number } = {};
   transactions
     .filter(t => t.type === 'EXPENSE')
@@ -314,11 +312,6 @@ export default function DashboardPage() {
 
   const sortedCategories = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1]).slice(0, 4);
   const maxCategoryAmount = sortedCategories.length > 0 ? sortedCategories[0][1] : 1;
-
-  const smartInsights = [
-    { title: 'Taxa de Poupança', desc: `Vocês poupam atualmente ${savingsRate.toFixed(1)}% das receitas mensais.` },
-    { title: 'Planejamento de Metas', desc: 'Utilize a aba Investimentos para cadastrar objetivos de longo prazo com divisão automática.' }
-  ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col font-sans">
@@ -334,7 +327,6 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        {/* Módulos Principais */}
         <nav className="hidden md:flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
           <button
             onClick={() => { setActiveModule('cadastros'); setActiveSubMenu('geral'); }}
@@ -370,7 +362,6 @@ export default function DashboardPage() {
           </button>
         </nav>
 
-        {/* Botão de Lançamento */}
         <div className="flex items-center gap-4">
           <button
             onClick={() => setIsTxModalOpen(true)}
@@ -390,7 +381,6 @@ export default function DashboardPage() {
       {/* ================= CORPO COM SIDEBAR ================= */}
       <div className="flex flex-1 min-h-[calc(100vh-5rem)]">
         
-        {/* SIDEBAR ESQUERDA */}
         <aside className={`fixed md:static inset-y-0 left-0 z-20 w-64 bg-slate-900/60 border-r border-slate-800 flex flex-col p-4 space-y-2 transition-transform ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800 md:hidden">
             <span className="font-bold text-white">Menu</span>
@@ -444,7 +434,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* SUBMENU: CADASTROS -> GERAL */}
           {activeModule === 'cadastros' && activeSubMenu === 'geral' && (
             <div className="space-y-8">
               <div>
@@ -472,62 +461,10 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <PieIcon className="w-5 h-5 text-emerald-400" /> Maiores Despesas por Categoria
-                  </h3>
-                  {sortedCategories.length > 0 ? (
-                    <div className="space-y-4">
-                      {sortedCategories.map(([catName, amount], index) => {
-                        const percentage = totalExpense > 0 ? (amount / totalExpense) * 100 : 0;
-                        return (
-                          <div key={index} className="space-y-1.5">
-                            <div className="flex justify-between text-xs font-semibold">
-                              <span className="text-white">{catName}</span>
-                              <span className="text-slate-400">{formatCurrency(amount)} ({percentage.toFixed(1)}%)</span>
-                            </div>
-                            <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
-                              <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(100, (amount / maxCategoryAmount) * 100)}%` }}></div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-slate-400 text-sm py-4">Nenhuma despesa registada.</p>
-                  )}
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-emerald-400" /> Comparativo de Fluxo
-                  </h3>
-                  <div className="space-y-4 py-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-300">Entradas Realizadas</span>
-                      <span className="text-emerald-400 font-bold">{formatCurrency(totalIncome)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-300">Saídas Realizadas</span>
-                      <span className="text-rose-400 font-bold">{formatCurrency(totalExpense)}</span>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center mt-4">
-                      <div>
-                        <p className="text-xs uppercase font-bold text-slate-400">Resultado Líquido</p>
-                        <p className={`text-lg font-black ${totalIncome - totalExpense >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {formatCurrency(totalIncome - totalExpense)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
-          {/* MÓDULO: INVESTIMENTOS (METAS & OBJETIVOS COM LANÇAMENTO AUTOMÁTICO) */}
+          {/* MÓDULO: INVESTIMENTOS (METAS & OBJETIVOS) */}
           {activeModule === 'investimentos' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
@@ -578,7 +515,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* DEMAIS MÓDULOS DE CADASTROS / PAGAR / RECEBER */}
           {activeModule === 'cadastros' && activeSubMenu === 'cartoes' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
