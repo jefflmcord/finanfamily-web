@@ -18,4 +18,27 @@ export default function RootLayout({
       </body>
     </html>
   );
+import type { Metadata, Viewport } from 'next';
+
+export const viewport: Viewport = {
+  themeColor: '#020617',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false, // Impede que a tela dê zoom acidental ao tocar nos botões no iPhone
+};
+
+export const metadata: Metadata = {
+  title: 'FinanFamily | Inteligência Financeira Familiar',
+  description: 'Controle despesas, receitas, cartões e metas da sua família em um único lugar.',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'FinanFamily',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
 }
