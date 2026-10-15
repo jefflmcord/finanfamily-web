@@ -82,7 +82,7 @@ export default function DashboardPage() {
       try {
         const user = JSON.parse(userStr);
         setUserName(user.name || 'Família');
-        currentFamilyId = String(user.family_id || '1');
+        currentFamilyId = String(user.family_id || user.familyId || '1');
         setFamilyId(currentFamilyId);
       } catch (e) {}
     }
@@ -117,43 +117,51 @@ export default function DashboardPage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(isNaN(n) ? 0 : n);
   };
 
-  // Salvar Novo Lançamento Avançado com o family_id correto do utilizador logado
+  // Salvar Lançamento blindado com recuperação segura do family_id
   const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!txDescription || !txAmount) return;
 
+    let resolvedFamilyId = 1;
     const userStr = localStorage.getItem('@FinanFamily:user');
-    let currentFamilyId = familyId;
     if (userStr) {
       try {
-        const user = JSON.parse(userStr);
-        if (user.family_id) {
-          currentFamilyId = user.family_id;
-        }
-      } catch (e) {}
+        const userObj = JSON.parse(userStr);
+        resolvedFamilyId = Number(userObj.family_id || userObj.familyId || familyId || 1);
+      } catch (e) {
+        resolvedFamilyId = Number(familyId || 1);
+      }
+    } else {
+      resolvedFamilyId = Number(familyId || 1);
     }
 
-    setSavingTx5(true);
+    setSavingTx(true);
+    setError('');
+
     try {
+      const payload = {
+        family_id: resolvedFamilyId,
+        description: txDescription.trim(),
+        amount: Number(txAmount.toString().replace(',', '.')),
+        type: txType,
+        payment_method: txPaymentMethod,
+        account_id: txAccountId ? Number(txAccountId) : null,
+        credit_card_id: txCardId ? Number(txCardId) : null,
+        category_id: txCategoryId ? Number(txCategoryId) : null,
+        transaction_date: txTransactionDate,
+        due_date: txDueDate,
+        total_installments: Number(txTotalInstallments) || 1,
+        start_installment: Number(txStartInstallment) || 1,
+        status: 'PENDING'
+      };
+
       const res = await fetch('https://finanfamily-api.onrender.com/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          family_id: Number(currentFamilyId),
-          description: txDescription,
-          amount: txAmount,
-          type: txType,
-          payment_method: txPaymentMethod,
-          account_id: txAccountId ? Number(txAccountId) : null,
-          credit_card_id: txCardId ? Number(txCardId) : null,
-          category_id: txCategoryId ? Number(txCategoryId) : null,
-          transaction_date: txTransactionDate,
-          due_date: txDueDate,
-          total_installments: Number(txTotalInstallments) || 1,
-          start_installment: Number(txStartInstallment) || 1,
-          status: 'PENDING'
-        }),
+        body: JSON.stringify(payload),
       });
+
+      const data = await res.json();
 
       if (res.ok) {
         setIsTxModalOpen(false);
@@ -163,18 +171,13 @@ export default function DashboardPage() {
         setTxStartInstallment('1');
         await fetchData();
       } else {
-        const err = await res.json();
-        setError(err.error || 'Erro ao salvar lançamento.');
+        setError(data.error || 'Erro ao salvar lançamento no servidor.');
       }
-    } catch (e) {
-      setError('Erro ao salvar transação.');
+    } catch (err) {
+      setError('Erro de conexão ao salvar transação.');
     } finally {
-      setSavingTx5(false);
+      setSavingTx(false);
     }
-  };
-
-  const setSavingTx5 = (val: boolean) => {
-    setSavingTx(val);
   };
 
   // Cadastrar Cartão de Crédito
@@ -182,13 +185,22 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!cardName || !cardBrand || !cardLimit) return;
 
+    let resolvedFamilyId = Number(familyId || 1);
+    const userStr = localStorage.getItem('@FinanFamily:user');
+    if (userStr) {
+      try {
+        const userObj = JSON.parse(userStr);
+        resolvedFamilyId = Number(userObj.family_id || userObj.familyId || familyId || 1);
+      } catch (e) {}
+    }
+
     setSavingCard(true);
     try {
       const res = await fetch('https://finanfamily-api.onrender.com/api/credit-cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          family_id: Number(familyId),
+          family_id: resolvedFamilyId,
           name: cardName,
           brand: cardBrand,
           total_limit: cardLimit,
@@ -218,7 +230,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
         <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
-        <p className="text-slate-400 font-medium">A carregar painel financeiro...</p>
+        <p className="text-slate-400 font-medium">Carregando painel financeiro...</p>
       </div>
     );
   }
