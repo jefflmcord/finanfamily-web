@@ -1035,15 +1035,15 @@ export default function DashboardPage() {
     const isSelected = selectedExpenseIds.includes(String(t.id));
 
     return (
-      <div key={t.id} className={`${compact ? 'p-3.5 rounded-xl' : 'p-4 sm:p-5 rounded-2xl'} border transition-all flex flex-col ${compact ? 'gap-2.5' : 'sm:flex-row sm:justify-between sm:items-center gap-4'} group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
-        <div className={`flex min-w-0 ${compact ? 'items-start gap-2.5' : 'items-center gap-4'}`}>
+      <div key={t.id} className={`${compact ? 'p-2.5 sm:px-3.5 rounded-xl items-center gap-3' : 'p-4 sm:p-5 rounded-2xl sm:flex-row sm:justify-between sm:items-center gap-4'} border transition-all flex ${compact ? 'flex-row' : 'flex-col'} group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
+        <div className={`flex min-w-0 ${compact ? 'flex-1 items-center gap-2 sm:gap-3' : 'items-center gap-4'}`}>
           {isIncome ? (
             canSettleTransactions ? (
               <button
                 onClick={() => handleToggleStatus(t)}
                 title={isPaid ? 'Marcar como pendente' : 'Marcar como pago'}
                 aria-label={isPaid ? `Marcar ${t.description} como pendente` : `Marcar ${t.description} como pago`}
-                className={`flex-shrink-0 p-2 -ml-2 transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
+                className={`flex-shrink-0 ${compact ? 'p-0' : 'p-2 -ml-2'} transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
               >
                 {isPaid ? <CheckCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : isOverdue ? <AlertCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : <Circle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} />}
               </button>
@@ -1063,7 +1063,7 @@ export default function DashboardPage() {
               onClick={() => handleExpenseSelection(String(t.id), !isSelected)}
               title={isSelected ? 'Desmarcar lançamento' : 'Selecionar para baixa'}
               aria-label={`${isSelected ? 'Desmarcar' : 'Selecionar'} ${t.description} para baixa`}
-              className={`flex-shrink-0 p-2 -ml-2 transition-colors disabled:opacity-40 ${isSelected ? 'text-emerald-400' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
+              className={`flex-shrink-0 ${compact ? 'p-0' : 'p-2 -ml-2'} transition-colors disabled:opacity-40 ${isSelected ? 'text-emerald-400' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
             >
               {isSelected ? <CheckCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : isOverdue ? <AlertCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : <Circle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} />}
             </button>
@@ -1092,8 +1092,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className={`flex flex-wrap items-center justify-between gap-2 ${compact ? 'w-full border-t border-slate-800/70 pt-2' : 'sm:justify-end gap-3 w-full sm:w-auto'}`}>
-          <span className={`${compact ? 'text-base' : 'text-lg'} font-black ${isPaid ? 'text-slate-500' : isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <div className={`flex flex-wrap items-center justify-end ${compact ? 'shrink-0 gap-2 sm:gap-4' : 'justify-between sm:justify-end gap-3 w-full sm:w-auto'}`}>
+          <span className={`${compact ? 'text-sm sm:text-base whitespace-nowrap' : 'text-lg'} font-black ${isPaid ? 'text-slate-500' : isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatCurrency(t.amount)}
           </span>
           <div className="flex items-center gap-2">
@@ -1101,7 +1101,7 @@ export default function DashboardPage() {
               <button
                 onClick={() => handlePayExpenses([t])}
                 disabled={payingExpenses}
-                className={`flex items-center gap-1.5 ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'} rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold disabled:opacity-50`}
+                className={`flex items-center gap-1.5 ${compact ? 'px-2 py-1.5 sm:px-2.5' : 'px-3 py-2'} rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold disabled:opacity-50`}
               >
                 <CheckCircle2 className="w-4 h-4" /> Baixar
               </button>
@@ -2257,11 +2257,11 @@ export default function DashboardPage() {
                 </div>
               </div>}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="max-w-5xl space-y-2">
                 {filteredPayableTransactions.length > 0 ? (
                   filteredPayableTransactions.map(t => renderModernTransactionRow(t, false, true))
                 ) : (
-                  <div className="sm:col-span-2 xl:col-span-3 bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
                     <CheckCircle2 className="w-12 h-12 text-slate-600 mx-auto" />
                     <p className="text-white font-bold text-lg">Tudo limpo por aqui!</p>
                     <p className="text-slate-400 text-sm">Nenhuma conta encontrada para estes filtros.</p>
