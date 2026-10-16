@@ -102,6 +102,8 @@ export default function DashboardPage() {
   // Modais de Edição e Exclusão
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<any>(null);
+  const [savingTransactionEdit, setSavingTransactionEdit] = useState(false);
+  const [transactionEditError, setTransactionEditError] = useState('');
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [txToDelete, setTxToDelete] = useState<any>(null);
@@ -235,6 +237,7 @@ export default function DashboardPage() {
     setTxCategoryId(tx.category_id || '');
     setTxAccountId(tx.account_id || '');
     setTxPaymentMethod(tx.payment_method || 'BOLETO');
+    setTransactionEditError('');
     setError('');
     setIsEditModalOpen(true);
   };
@@ -242,16 +245,23 @@ export default function DashboardPage() {
   const handleUpdateTx = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTx || !canEditTransactions) return;
+    const amount = Number(txAmount.toString().replace(',', '.'));
+    if (!txDescription.trim() || !Number.isFinite(amount) || amount <= 0 || !txDueDate) {
+      setTransactionEditError('Informe uma descrição, valor e vencimento válidos.');
+      return;
+    }
     const matchingCategories = categories.filter(category => category.flow_type === editingTx.type);
     if (matchingCategories.length > 0 && !matchingCategories.some(category => String(category.id) === String(txCategoryId))) {
-      setError('Selecione uma categoria válida para este lançamento.');
+      setTransactionEditError('Selecione uma categoria válida para este lançamento.');
       return;
     }
 
+    setSavingTransactionEdit(true);
+    setTransactionEditError('');
     try {
       const payload = {
         description: txDescription.trim(),
-        amount: Number(txAmount.toString().replace(',', '.')),
+        amount,
         due_date: txDueDate,
         category_id: txCategoryId || null,
         account_id: txAccountId || null,
@@ -270,11 +280,13 @@ export default function DashboardPage() {
         setEditingTx(null);
         await fetchData();
       } else {
-        const data = await res.json();
-        setError(data.error || 'Erro ao atualizar transação.');
+        const data = await res.json().catch(() => ({}));
+        setTransactionEditError(data.error || 'Erro ao atualizar transação.');
       }
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'Erro ao atualizar transação.');
+      setTransactionEditError(updateError instanceof Error ? updateError.message : 'Erro ao atualizar transação.');
+    } finally {
+      setSavingTransactionEdit(false);
     }
   };
 
@@ -2992,7 +3004,20 @@ export default function DashboardPage() {
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Valor (R$)</label><input type="number" step="0.01" required value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Vencimento</label><input type="date" required value={txDueDate} onChange={e => setTxDueDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
               </div>
-              <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer"><CheckCircle2 className="w-5 h-5" /> Guardar Alterações</button>
+              {transactionEditError && (
+                <p role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-300">
+                  {transactionEditError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={savingTransactionEdit}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer disabled:cursor-wait disabled:opacity-60"
+              >
+                {savingTransactionEdit
+                  ? <><Loader2 className="w-5 h-5 animate-spin" /> Salvando...</>
+                  : <><CheckCircle2 className="w-5 h-5" /> Guardar Alterações</>}
+              </button>
             </form>
           </div>
         </div>
