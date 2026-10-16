@@ -37,6 +37,7 @@ export default function DashboardPage() {
   const [dashboardYear, setDashboardYear] = useState<number>(new Date().getFullYear());
   const [chartStatusMode, setChartStatusMode] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL');
   const [selectedChartMonth, setSelectedChartMonth] = useState<number>(new Date().getMonth() + 1);
+  const [commitmentMonth, setCommitmentMonth] = useState<number>(new Date().getMonth() + 1);
 
   // Filtros de Listagem
   const [filterMonth, setFilterMonth] = useState<number | 'ALL'>('ALL');
@@ -573,6 +574,24 @@ export default function DashboardPage() {
 
   const selectedMonthDetail =
     monthlyChartData.find(m => m.monthNumber === selectedChartMonth) || monthlyChartData[new Date().getMonth()] || monthlyChartData[0];
+  const commitmentMonthDetail =
+    monthlyChartData.find(m => m.monthNumber === commitmentMonth) || monthlyChartData[0];
+  const monthlyCommitmentRate = commitmentMonthDetail.incomeTotal > 0
+    ? (commitmentMonthDetail.expenseTotal / commitmentMonthDetail.incomeTotal) * 100
+    : null;
+  const commitmentLevel = monthlyCommitmentRate === null
+    ? null
+    : monthlyCommitmentRate <= 30
+      ? { label: 'Baixo', color: 'text-emerald-300' }
+      : monthlyCommitmentRate <= 50
+        ? { label: 'Moderado', color: 'text-yellow-300' }
+        : monthlyCommitmentRate <= 70
+          ? { label: 'Elevado', color: 'text-orange-400' }
+          : { label: 'Muito alto', color: 'text-rose-400' };
+  const commitmentNeedleAngle = -90 + Math.min(monthlyCommitmentRate ?? 0, 100) * 1.8;
+  const commitmentNeedleRadians = (commitmentNeedleAngle * Math.PI) / 180;
+  const commitmentNeedleX = 130 + 76 * Math.cos(commitmentNeedleRadians);
+  const commitmentNeedleY = 130 + 76 * Math.sin(commitmentNeedleRadians);
 
   const CATEGORY_COLORS = ['#10b981', '#38bdf8', '#f59e0b', '#a855f7', '#f43f5e', '#6366f1'];
   const expensesByCategory: { [key: string]: number } = {};
@@ -1280,6 +1299,114 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Indicador mensal de comprometimento financeiro */}
+              <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-white">Comprometimento financeiro</h2>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                      Percentual da receita prevista comprometido com contas a pagar no mês.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                    <Calendar className="w-4 h-4 text-emerald-400" />
+                    <span className="sr-only">Mês do score</span>
+                    <select
+                      aria-label="Selecionar mês do comprometimento financeiro"
+                      value={commitmentMonth}
+                      onChange={e => setCommitmentMonth(Number(e.target.value))}
+                      className="bg-slate-950 border border-slate-800 text-white rounded-xl px-3 py-2 outline-none focus:border-emerald-500"
+                    >
+                      {MONTH_FULL_NAMES.map((month, index) => (
+                        <option key={month} value={index + 1}>{month} {dashboardYear}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                  <div className="flex flex-col items-center">
+                    <svg
+                      viewBox="0 0 260 160"
+                      className="w-full max-w-sm"
+                      role="img"
+                      aria-label={monthlyCommitmentRate === null
+                        ? `Sem receita prevista para calcular o comprometimento em ${commitmentMonthDetail.fullName}`
+                        : `Comprometimento financeiro de ${monthlyCommitmentRate.toFixed(1)} por cento em ${commitmentMonthDetail.fullName}`}
+                    >
+                      <defs>
+                        <linearGradient id="commitment-gauge-gradient" x1="30" y1="0" x2="230" y2="0" gradientUnits="userSpaceOnUse">
+                          <stop offset="0%" stopColor="#bbf7d0" />
+                          <stop offset="30%" stopColor="#4ade80" />
+                          <stop offset="50%" stopColor="#facc15" />
+                          <stop offset="70%" stopColor="#fb923c" />
+                          <stop offset="100%" stopColor="#ef4444" />
+                        </linearGradient>
+                      </defs>
+                      <path
+                        d="M 30 130 A 100 100 0 0 1 230 130"
+                        fill="none"
+                        stroke="url(#commitment-gauge-gradient)"
+                        strokeWidth="18"
+                        strokeLinecap="round"
+                      />
+                      {monthlyCommitmentRate !== null && (
+                        <>
+                          <line
+                            x1="130"
+                            y1="130"
+                            x2={commitmentNeedleX}
+                            y2={commitmentNeedleY}
+                            stroke="#f8fafc"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                          />
+                          <circle cx="130" cy="130" r="8" fill="#f8fafc" />
+                          <circle cx="130" cy="130" r="3" fill="#0f172a" />
+                        </>
+                      )}
+                      <text x="27" y="153" fill="#94a3b8" fontSize="11">0%</text>
+                      <text x="211" y="153" fill="#94a3b8" fontSize="11">100%+</text>
+                    </svg>
+                    {monthlyCommitmentRate === null ? (
+                      <p className="text-sm font-bold text-amber-300 text-center -mt-1">
+                        {commitmentMonthDetail.expenseTotal > 0
+                          ? 'Sem receita prevista para calcular'
+                          : 'Sem movimentações previstas'}
+                      </p>
+                    ) : (
+                      <div className="text-center -mt-1">
+                        <p className="text-3xl font-black text-white">
+                          {monthlyCommitmentRate.toFixed(1)}%
+                        </p>
+                        <p className={`text-sm font-bold ${commitmentLevel?.color}`}>
+                          Nível {commitmentLevel?.label}
+                          {monthlyCommitmentRate > 100 ? ' • despesas superam a receita' : ''}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-slate-950/70 border border-emerald-500/15 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Previsto a receber</p>
+                      <p className="text-xl font-black text-emerald-400 mt-2">
+                        {formatCurrency(commitmentMonthDetail.incomeTotal)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-950/70 border border-rose-500/15 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Previsto a pagar</p>
+                      <p className="text-xl font-black text-rose-400 mt-2">
+                        {formatCurrency(commitmentMonthDetail.expenseTotal)}
+                      </p>
+                    </div>
+                    <p className="sm:col-span-2 text-xs leading-relaxed text-slate-500">
+                      Calculado sobre os totais previstos do mês, incluindo lançamentos pagos e pendentes. As faixas são indicativas: baixo até 30%, moderado até 50%, elevado até 70% e muito alto acima de 70%.
+                    </p>
+                  </div>
+                </div>
+              </section>
 
               {/* 2. GRÁFICO PRINCIPAL MÊS A MÊS: TOTAL A RECEBER VS TOTAL A PAGAR (COM FILTRO POR ANO) */}
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
