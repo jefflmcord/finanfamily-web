@@ -13,7 +13,7 @@ import {
   CheckCircle2, FileText, DollarSign, Layers, PieChart as PieIcon, 
   BarChart3, Trophy, Edit, Trash2, AlertTriangle, Calendar, Filter, Circle, CheckCircle, AlertCircle,
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Sparkles, Clock,
-  Printer, FileDown, FileSpreadsheet, Menu, Plus
+  Printer, FileDown, FileSpreadsheet, Menu, Plus, User
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -31,6 +31,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [userName, setUserName] = useState('Família');
+  const [userEmail, setUserEmail] = useState('');
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [familyId, setFamilyId] = useState<string>('1');
 
   // Filtros do Dashboard Inicial (Visão Geral)
@@ -99,6 +101,14 @@ export default function DashboardPage() {
       try {
         const user = JSON.parse(userStr);
         setUserName(user.name || 'Família');
+        setUserEmail(typeof user.email === 'string' ? user.email : '');
+        setUserAvatarUrl(
+          typeof user.avatar_url === 'string' && user.avatar_url
+            ? user.avatar_url
+            : typeof user.picture === 'string' && user.picture
+              ? user.picture
+              : null
+        );
         currentFamilyId = String(user.family_id || user.familyId || '1');
         setFamilyId(currentFamilyId);
       } catch (e) {}
@@ -1051,6 +1061,14 @@ export default function DashboardPage() {
   const calculatedCardDueDate = txType === 'EXPENSE' && txPaymentMethod === 'CARD' && selectedTransactionCard
     ? getCardPurchaseDueDate(txTransactionDate, Number(selectedTransactionCard.closing_day), Number(selectedTransactionCard.due_day))
     : '';
+  const userInitials = userName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(part => part[0])
+    .join('')
+    .toLocaleUpperCase('pt-BR');
+  const userFirstName = userName.trim().split(/\s+/)[0] || 'Usuário';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col font-sans">
@@ -1066,7 +1084,7 @@ export default function DashboardPage() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/25 border border-emerald-500/30 flex items-center justify-center text-emerald-400"><Wallet className="w-6 h-6" /></div>
+          <div className="hidden sm:flex w-10 h-10 rounded-xl bg-emerald-500/25 border border-emerald-500/30 items-center justify-center text-emerald-400"><Wallet className="w-6 h-6" /></div>
           <span className="font-extrabold text-lg sm:text-xl text-white tracking-tight">Finan<span className="text-emerald-400">Family</span></span>
         </div>
         <nav className="hidden md:flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
@@ -1075,8 +1093,31 @@ export default function DashboardPage() {
           <button onClick={() => { setActiveModule('receber'); setActiveSubMenu('contas_receber'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'receber' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Contas a Receber</button>
           <button onClick={() => { setActiveModule('investimentos'); setActiveSubMenu('metas'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'investimentos' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Investimentos</button>
         </nav>
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-1 sm:gap-4">
           <button onClick={() => setIsTxModalOpen(true)} className="hidden md:flex bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-5 rounded-xl shadow-lg items-center gap-2 cursor-pointer transition-all"><PlusCircle className="w-5 h-5" /> Novo Lançamento</button>
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3 sm:pl-3 sm:border-l sm:border-slate-800">
+            {userAvatarUrl ? (
+              <img
+                src={userAvatarUrl}
+                alt={`Foto de ${userName}`}
+                onError={() => setUserAvatarUrl(null)}
+                referrerPolicy="no-referrer"
+                className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-full border border-emerald-500/30 object-cover"
+              />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-xs font-extrabold text-emerald-300"
+              >
+                {userInitials || <User className="h-4 w-4" />}
+              </div>
+            )}
+            <div className="min-w-0 max-w-14 sm:max-w-40">
+              <p className="truncate text-xs font-bold text-white sm:hidden" title={userName}>{userFirstName}</p>
+              <p className="hidden truncate text-sm font-bold text-white sm:block" title={userName}>{userName}</p>
+              <p className="hidden truncate text-xs text-slate-400 sm:block" title={userEmail}>{userEmail || 'Usuário conectado'}</p>
+            </div>
+          </div>
           <button onClick={() => { localStorage.clear(); router.push('/login'); }} aria-label="Sair" className="flex items-center gap-2 text-slate-400 hover:text-rose-400 text-sm font-semibold p-2"><LogOut className="w-5 h-5" /><span className="hidden sm:inline">Sair</span></button>
         </div>
       </header>
