@@ -1028,15 +1028,15 @@ export default function DashboardPage() {
 
   const handlePaySelectedExpenses = () => handlePayExpenses(selectedPayableExpenses);
 
-  const renderModernTransactionRow = (t: any, isIncome: boolean) => {
+  const renderModernTransactionRow = (t: any, isIncome: boolean, compact = false) => {
     const status = getTransactionStatus(t);
     const isPaid = status === 'PAID';
     const isOverdue = status === 'OVERDUE';
     const isSelected = selectedExpenseIds.includes(String(t.id));
 
     return (
-      <div key={t.id} className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
-        <div className="flex items-center gap-4 min-w-0">
+      <div key={t.id} className={`${compact ? 'p-3.5 rounded-xl' : 'p-4 sm:p-5 rounded-2xl'} border transition-all flex flex-col ${compact ? 'gap-2.5' : 'sm:flex-row sm:justify-between sm:items-center gap-4'} group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
+        <div className={`flex min-w-0 ${compact ? 'items-start gap-2.5' : 'items-center gap-4'}`}>
           {isIncome ? (
             canSettleTransactions ? (
               <button
@@ -1045,7 +1045,7 @@ export default function DashboardPage() {
                 aria-label={isPaid ? `Marcar ${t.description} como pendente` : `Marcar ${t.description} como pago`}
                 className={`flex-shrink-0 p-2 -ml-2 transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
               >
-                {isPaid ? <CheckCircle className="w-7 h-7" /> : isOverdue ? <AlertCircle className="w-7 h-7" /> : <Circle className="w-7 h-7" />}
+                {isPaid ? <CheckCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : isOverdue ? <AlertCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : <Circle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} />}
               </button>
             ) : isPaid ? (
               <CheckCircle className="w-7 h-7 flex-shrink-0 text-emerald-500" aria-label="Lançamento recebido" />
@@ -1053,7 +1053,7 @@ export default function DashboardPage() {
               <Circle className="w-7 h-7 flex-shrink-0 text-slate-600" aria-label="Lançamento pendente" />
             )
           ) : isPaid ? (
-            <CheckCircle className="w-7 h-7 flex-shrink-0 text-emerald-500" aria-label="Lançamento pago" />
+            <CheckCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'} flex-shrink-0 text-emerald-500`} aria-label="Lançamento pago" />
           ) : canSettleTransactions ? (
             <button
               type="button"
@@ -1065,15 +1065,15 @@ export default function DashboardPage() {
               aria-label={`${isSelected ? 'Desmarcar' : 'Selecionar'} ${t.description} para baixa`}
               className={`flex-shrink-0 p-2 -ml-2 transition-colors disabled:opacity-40 ${isSelected ? 'text-emerald-400' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
             >
-              {isSelected ? <CheckCircle className="w-7 h-7" /> : isOverdue ? <AlertCircle className="w-7 h-7" /> : <Circle className="w-7 h-7" />}
+              {isSelected ? <CheckCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : isOverdue ? <AlertCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : <Circle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} />}
             </button>
           ) : (
-            <Circle className="w-7 h-7 flex-shrink-0 text-slate-600" aria-label="Lançamento pendente" />
+            <Circle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'} flex-shrink-0 text-slate-600`} aria-label="Lançamento pendente" />
           )}
           
           <div className="min-w-0">
-            <p className={`font-bold text-base break-words ${isPaid ? 'text-slate-400 line-through' : 'text-white'}`}>{t.description}</p>
-            <div className="flex flex-wrap items-center gap-2 mt-1 text-xs font-medium">
+            <p className={`font-bold ${compact ? 'text-sm line-clamp-2' : 'text-base break-words'} ${isPaid ? 'text-slate-400 line-through' : 'text-white'}`}>{t.description}</p>
+            <div className={`flex flex-wrap items-center gap-2 ${compact ? 'mt-1.5' : 'mt-1'} text-xs font-medium`}>
               <span className={`px-2 py-0.5 rounded-md ${isPaid ? 'bg-slate-800 text-slate-400' : isOverdue ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-300'}`}>
                 <Calendar className="w-3 h-3 inline mr-1 -mt-0.5" />
                 {formatDatePT(t.due_date)}
@@ -1092,8 +1092,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-          <span className={`text-lg font-black ${isPaid ? 'text-slate-500' : isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-2 ${compact ? 'w-full border-t border-slate-800/70 pt-2' : 'sm:justify-end gap-3 w-full sm:w-auto'}`}>
+          <span className={`${compact ? 'text-base' : 'text-lg'} font-black ${isPaid ? 'text-slate-500' : isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatCurrency(t.amount)}
           </span>
           <div className="flex items-center gap-2">
@@ -1101,14 +1101,14 @@ export default function DashboardPage() {
               <button
                 onClick={() => handlePayExpenses([t])}
                 disabled={payingExpenses}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold disabled:opacity-50"
+                className={`flex items-center gap-1.5 ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'} rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold disabled:opacity-50`}
               >
                 <CheckCircle2 className="w-4 h-4" /> Baixar
               </button>
             )}
             {(canEditTransactions || canDeleteTransactions) && <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-              {canEditTransactions && <button onClick={() => openEditModal(t)} aria-label={`Editar ${t.description}`} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm"><Edit className="w-4 h-4" /></button>}
-              {canDeleteTransactions && <button onClick={() => openDeleteModal(t)} aria-label={`Excluir ${t.description}`} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>}
+              {canEditTransactions && <button onClick={() => openEditModal(t)} aria-label={`Editar ${t.description}`} className={`${compact ? 'p-1.5' : 'p-2'} bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm`}><Edit className="w-4 h-4" /></button>}
+              {canDeleteTransactions && <button onClick={() => openDeleteModal(t)} aria-label={`Excluir ${t.description}`} className={`${compact ? 'p-1.5' : 'p-2'} bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm`}><Trash2 className="w-4 h-4" /></button>}
             </div>}
           </div>
         </div>
@@ -2257,11 +2257,11 @@ export default function DashboardPage() {
                 </div>
               </div>}
 
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {filteredPayableTransactions.length > 0 ? (
-                  filteredPayableTransactions.map(t => renderModernTransactionRow(t, false))
+                  filteredPayableTransactions.map(t => renderModernTransactionRow(t, false, true))
                 ) : (
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
+                  <div className="sm:col-span-2 xl:col-span-3 bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
                     <CheckCircle2 className="w-12 h-12 text-slate-600 mx-auto" />
                     <p className="text-white font-bold text-lg">Tudo limpo por aqui!</p>
                     <p className="text-slate-400 text-sm">Nenhuma conta encontrada para estes filtros.</p>
