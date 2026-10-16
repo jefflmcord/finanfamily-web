@@ -45,8 +45,16 @@ export default function DashboardPage() {
   const [selectedChartMonth, setSelectedChartMonth] = useState<number>(new Date().getMonth() + 1);
 
   // Filtros de Listagem
-  const [filterMonth, setFilterMonth] = useState<number | 'ALL'>('ALL');
-  const [filterYear, setFilterYear] = useState<number | 'ALL'>(new Date().getFullYear());
+  const [filterPeriod, setFilterPeriod] = useState<'CURRENT_MONTH' | 'CURRENT_YEAR' | 'LAST_60_DAYS' | 'CUSTOM' | 'ALL'>('CURRENT_YEAR');
+  const [dashboardPeriodOverride, setDashboardPeriodOverride] = useState<{ month: number | 'ALL'; year: number | 'ALL' } | null>(null);
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  });
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'PENDING' | 'PAID' | 'OVERDUE'>('ALL');
   const [payableView, setPayableView] = useState<'LIST' | 'KANBAN'>('LIST');
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
@@ -773,16 +781,39 @@ export default function DashboardPage() {
   });
 
   // Lógica de Filtro para Transações Modernas
+  const localToday = new Date();
+  const todayKey = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-${String(localToday.getDate()).padStart(2, '0')}`;
+  const periodStartDate = (() => {
+    if (filterPeriod === 'CUSTOM') return customStartDate;
+    if (filterPeriod === 'ALL') return '';
+    if (filterPeriod === 'CURRENT_MONTH') {
+      return `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-01`;
+    }
+    if (filterPeriod === 'LAST_60_DAYS') {
+      const start = new Date(localToday.getFullYear(), localToday.getMonth(), localToday.getDate() - 59);
+      return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    }
+    return `${localToday.getFullYear()}-01-01`;
+  })();
+  const periodEndDate = filterPeriod === 'CUSTOM' ? customEndDate : filterPeriod === 'ALL' ? '' : todayKey;
+  const customPeriodInvalid = !dashboardPeriodOverride && filterPeriod === 'CUSTOM' &&
+    (!customStartDate || !customEndDate || customStartDate > customEndDate);
+
   const filteredTransactions = (type: 'EXPENSE' | 'INCOME') => {
     return transactions.filter(t => {
       if (t.type !== type) return false;
 
-      // Filtro de Mês/Ano (Agora suporta 'ALL')
-      if (t.due_date) {
-        const [year, month] = t.due_date.split('-');
-        if (filterYear !== 'ALL' && Number(year) !== filterYear) return false;
-        if (filterMonth !== 'ALL' && Number(month) !== filterMonth) return false;
+      const dueDate = t.due_date ? String(t.due_date).slice(0, 10) : '';
+      if (dashboardPeriodOverride && dueDate) {
+        const [year, month] = dueDate.split('-').map(Number);
+        if (dashboardPeriodOverride.year !== 'ALL' && year !== dashboardPeriodOverride.year) return false;
+        if (dashboardPeriodOverride.month !== 'ALL' && month !== dashboardPeriodOverride.month) return false;
+      } else if (dashboardPeriodOverride && !dueDate) {
+        return false;
       }
+      if (customPeriodInvalid) return false;
+      if (!dashboardPeriodOverride && periodStartDate && (!dueDate || dueDate < periodStartDate)) return false;
+      if (!dashboardPeriodOverride && periodEndDate && (!dueDate || dueDate > periodEndDate)) return false;
 
       // Filtro de Status
       if (filterStatus !== 'ALL') {
@@ -838,14 +869,21 @@ export default function DashboardPage() {
   });
 
   const getPayableReportFilters = () => {
-    const monthName = filterMonth === 'ALL'
-      ? 'Todos os meses'
-      : new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(2024, filterMonth - 1, 1));
-    const yearName = filterYear === 'ALL' ? 'Todos os anos' : String(filterYear);
+    const periodName = dashboardPeriodOverride
+      ? `${dashboardPeriodOverride.month === 'ALL' ? 'Todos os meses' : MONTH_FULL_NAMES[dashboardPeriodOverride.month - 1]} • ${dashboardPeriodOverride.year === 'ALL' ? 'Todos os anos' : dashboardPeriodOverride.year}`
+      : filterPeriod === 'CURRENT_MONTH'
+      ? 'Mês atual'
+      : filterPeriod === 'CURRENT_YEAR'
+        ? 'Ano atual'
+        : filterPeriod === 'LAST_60_DAYS'
+          ? 'Últimos 60 dias'
+          : filterPeriod === 'CUSTOM'
+            ? `Período personalizado: ${formatDatePT(periodStartDate)} a ${formatDatePT(periodEndDate)}`
+            : 'Todos os períodos';
     const statusName = filterStatus === 'ALL'
       ? 'Todos os status'
       : filterStatus === 'PENDING' ? 'Pendente' : filterStatus === 'OVERDUE' ? 'Atrasado' : 'Pago';
-    return `${monthName} • ${yearName} • ${statusName}`;
+    return `${periodName} • ${statusName}`;
   };
 
   const exportPayableExpensesToExcel = () => {
@@ -1152,24 +1190,71 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full md:w-auto">
-        <select value={filterMonth} onChange={e => { setSelectedExpenseIds([]); setFilterMonth(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)); }} className="w-full min-w-0 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 transition-colors">
-          <option value="ALL">Todos os meses</option>
-          <option value={1}>Janeiro</option><option value={2}>Fevereiro</option><option value={3}>Março</option>
-          <option value={4}>Abril</option><option value={5}>Maio</option><option value={6}>Junho</option>
-          <option value={7}>Julho</option><option value={8}>Agosto</option><option value={9}>Setembro</option>
-          <option value={10}>Outubro</option><option value={11}>Novembro</option><option value={12}>Dezembro</option>
+      <div className={`grid grid-cols-1 ${filterPeriod === 'CUSTOM' && !dashboardPeriodOverride ? 'sm:grid-cols-2' : ''} sm:grid-cols-2 gap-3 w-full md:w-auto`}>
+        <select
+          value={dashboardPeriodOverride ? 'DASHBOARD' : filterPeriod}
+          onChange={e => {
+            setSelectedExpenseIds([]);
+            setDashboardPeriodOverride(null);
+            setFilterPeriod(e.target.value as typeof filterPeriod);
+          }}
+          aria-label="Período dos lançamentos"
+          className="w-full min-w-0 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 transition-colors"
+        >
+          {dashboardPeriodOverride && (
+            <option value="DASHBOARD">
+              {dashboardPeriodOverride.month === 'ALL' ? 'Todos os meses' : MONTH_FULL_NAMES[dashboardPeriodOverride.month - 1]} • {dashboardPeriodOverride.year === 'ALL' ? 'Todos os anos' : dashboardPeriodOverride.year}
+            </option>
+          )}
+          <option value="CURRENT_MONTH">Mês atual</option>
+          <option value="CURRENT_YEAR">Ano atual</option>
+          <option value="LAST_60_DAYS">Últimos 60 dias</option>
+          <option value="CUSTOM">Período personalizado</option>
+          <option value="ALL">Todos os períodos</option>
         </select>
-        <select value={filterYear} onChange={e => { setSelectedExpenseIds([]); setFilterYear(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)); }} className="w-full min-w-0 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 transition-colors">
-          <option value="ALL">Todos os anos</option>
-          {[2024, 2025, 2026, 2027, 2028, 2029].map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
+        {filterPeriod === 'CUSTOM' && (
+          <>
+            <label className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs text-slate-400">
+              De
+              <input
+                type="date"
+                required
+                value={customStartDate}
+                onChange={e => {
+                  setSelectedExpenseIds([]);
+                  setCustomStartDate(e.target.value);
+                }}
+                aria-label="Data inicial do período personalizado"
+                className="min-w-0 flex-1 bg-transparent py-2.5 text-slate-200 outline-none"
+              />
+            </label>
+            <label className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs text-slate-400">
+              Até
+              <input
+                type="date"
+                required
+                value={customEndDate}
+                onChange={e => {
+                  setSelectedExpenseIds([]);
+                  setCustomEndDate(e.target.value);
+                }}
+                aria-label="Data final do período personalizado"
+                className="min-w-0 flex-1 bg-transparent py-2.5 text-slate-200 outline-none"
+              />
+            </label>
+          </>
+        )}
         <select value={filterStatus} onChange={e => { setSelectedExpenseIds([]); setFilterStatus(e.target.value as any); }} className="w-full min-w-0 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 transition-colors">
           <option value="ALL">Todos os Status</option>
           <option value="PENDING">A Pagar / Pendente</option>
           <option value="OVERDUE">Atrasados</option>
           <option value="PAID">Pagos</option>
         </select>
+        {customPeriodInvalid && (
+          <p role="alert" className="text-xs text-rose-400 sm:col-span-2">
+            Informe um intervalo válido: a data inicial deve ser anterior ou igual à data final.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -1862,8 +1947,10 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setFilterYear(dashboardYear);
-                          setFilterMonth(dashboardMonth === 'ALL' ? selectedMonthDetail.monthNumber : dashboardMonth);
+                          setDashboardPeriodOverride({
+                            year: dashboardYear,
+                            month: dashboardMonth === 'ALL' ? selectedMonthDetail.monthNumber : dashboardMonth,
+                          });
                           setFilterStatus('ALL');
                           setActiveModule('pagar');
                           setActiveSubMenu('contas_pagar');
@@ -1875,8 +1962,10 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setFilterYear(dashboardYear);
-                          setFilterMonth(dashboardMonth === 'ALL' ? selectedMonthDetail.monthNumber : dashboardMonth);
+                          setDashboardPeriodOverride({
+                            year: dashboardYear,
+                            month: dashboardMonth === 'ALL' ? selectedMonthDetail.monthNumber : dashboardMonth,
+                          });
                           setFilterStatus('ALL');
                           setActiveModule('receber');
                           setActiveSubMenu('contas_receber');
@@ -2095,8 +2184,10 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setFilterYear(dashboardYear);
-                      setFilterMonth(dashboardMonth);
+                      setDashboardPeriodOverride({
+                        year: dashboardYear,
+                        month: dashboardMonth,
+                      });
                       setFilterStatus('PENDING');
                       setActiveModule('pagar');
                       setActiveSubMenu('contas_pagar');
