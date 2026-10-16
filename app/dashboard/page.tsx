@@ -80,6 +80,7 @@ export default function DashboardPage() {
   const [txAmountMode, setTxAmountMode] = useState<'TOTAL' | 'INSTALLMENT'>('TOTAL');
   const [txRepeatMonthly, setTxRepeatMonthly] = useState(false);
   const [txRecurrenceMonths, setTxRecurrenceMonths] = useState('2');
+  const [hoveredCreditCardCategory, setHoveredCreditCardCategory] = useState<string | null>(null);
 
   // Modal Cartão & Objetivos
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -646,9 +647,6 @@ export default function DashboardPage() {
       color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
     };
   });
-  const creditCardPieGradient = `conic-gradient(${creditCardPieSlices
-    .map(slice => `${slice.color} ${slice.start}% ${slice.end}%`)
-    .join(', ')})`;
   const yearMoneyBurned = yearTransactions
     .filter(transaction => transaction.type === 'EXPENSE' && transaction.status === 'PAID')
     .reduce((total, transaction) => total + Math.max(
@@ -1735,28 +1733,65 @@ export default function DashboardPage() {
                 </div>
 
                 {creditCardPieSlices.length > 0 ? (
-                  <div className="mt-5 grid grid-cols-1 md:grid-cols-[220px_1fr] items-center gap-6">
-                    <div
-                      role="img"
-                      aria-label={`Gráfico de pizza dos gastos com cartão de crédito por categoria. Total ${formatCurrency(creditCardExpenseTotal)}.`}
-                      className="mx-auto h-52 w-52 rounded-full border border-slate-700/80 shadow-lg shadow-sky-950/30"
-                      style={{ background: creditCardPieGradient }}
-                    />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {creditCardPieSlices.map(({ category, amount, color }) => (
-                        <div key={category} className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-slate-950/60 border border-slate-800/80 p-3">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-                            <span className="truncate text-xs text-slate-300">{category}</span>
+                  <div className="mt-5 flex justify-center">
+                    <div className="relative w-full max-w-[440px]">
+                      <svg
+                        viewBox="0 0 200 200"
+                        role="group"
+                        aria-label={`Gráfico de pizza dos gastos com cartão de crédito por categoria. Total ${formatCurrency(creditCardExpenseTotal)}.`}
+                        className="block w-full overflow-visible drop-shadow-xl"
+                        onMouseLeave={() => setHoveredCreditCardCategory(null)}
+                      >
+                        {creditCardPieSlices.map(({ category, amount, color, start, end }) => {
+                          const startAngle = (start / 100) * 360 - 90;
+                          const endAngle = (end / 100) * 360 - 90;
+                          const startRadians = (startAngle * Math.PI) / 180;
+                          const endRadians = (endAngle * Math.PI) / 180;
+                          const startX = 100 + 98 * Math.cos(startRadians);
+                          const startY = 100 + 98 * Math.sin(startRadians);
+                          const endX = 100 + 98 * Math.cos(endRadians);
+                          const endY = 100 + 98 * Math.sin(endRadians);
+                          const percentage = creditCardExpenseTotal > 0
+                            ? (amount / creditCardExpenseTotal) * 100
+                            : 0;
+                          const path = percentage >= 99.999
+                            ? undefined
+                            : `M 100 100 L ${startX} ${startY} A 98 98 0 ${percentage > 50 ? 1 : 0} 1 ${endX} ${endY} Z`;
+                          const accessibleLabel = `${category}: ${formatCurrency(amount)}, ${percentage.toFixed(1)}%`;
+                          const interactionProps = {
+                            onMouseEnter: () => setHoveredCreditCardCategory(category),
+                            onFocus: () => setHoveredCreditCardCategory(category),
+                            onBlur: () => setHoveredCreditCardCategory(null),
+                            tabIndex: 0,
+                            role: 'button' as const,
+                            'aria-label': accessibleLabel,
+                            className: 'cursor-pointer stroke-slate-950/70 stroke-[0.7] transition-[filter] duration-150 hover:brightness-125 focus:brightness-125 focus:outline-none',
+                          };
+
+                          return path ? (
+                            <path key={category} d={path} fill={color} {...interactionProps} />
+                          ) : (
+                            <circle key={category} cx="100" cy="100" r="98" fill={color} {...interactionProps} />
+                          );
+                        })}
+                      </svg>
+                      {hoveredCreditCardCategory && (() => {
+                        const slice = creditCardPieSlices.find(item => item.category === hoveredCreditCardCategory);
+                        if (!slice) return null;
+                        const percentage = creditCardExpenseTotal > 0
+                          ? (slice.amount / creditCardExpenseTotal) * 100
+                          : 0;
+                        return (
+                          <div
+                            role="status"
+                            className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-3 text-center shadow-2xl"
+                          >
+                            <p className="max-w-52 truncate text-sm font-bold text-white">{slice.category}</p>
+                            <p className="mt-1 text-sm font-black text-sky-300">{formatCurrency(slice.amount)}</p>
+                            <p className="text-xs text-slate-400">{percentage.toFixed(1)}% dos gastos no cartão</p>
                           </div>
-                          <div className="shrink-0 text-right">
-                            <strong className="block text-xs text-slate-100">{formatCurrency(amount)}</strong>
-                            <span className="text-[10px] text-slate-500">
-                              {creditCardExpenseTotal > 0 ? ((amount / creditCardExpenseTotal) * 100).toFixed(1) : '0.0'}%
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })()}
                     </div>
                   </div>
                 ) : (
