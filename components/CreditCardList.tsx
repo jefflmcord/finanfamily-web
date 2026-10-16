@@ -130,6 +130,18 @@ export default function CreditCardList({
     String(transaction.credit_card_id) === String(cardId) && transaction.status !== 'PAID'
   ).length;
 
+  const getAvailableLimit = (card: CardItem) => {
+    const committedAmount = transactions
+      .filter((transaction) =>
+        String(transaction.credit_card_id) === String(card.id) &&
+        transaction.type === 'EXPENSE' &&
+        transaction.status !== 'PAID'
+      )
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+
+    return Number(card.total_limit || 0) - committedAmount;
+  };
+
   function handleOpenEditCard(card: CardItem) {
     setEditingCard(card);
     setEditName(card.name);
@@ -333,6 +345,12 @@ export default function CreditCardList({
                   <div className="flex justify-between text-slate-400">
                     <span>Limite Total:</span>
                     <strong className="text-slate-200">{formatCurrency(card.total_limit)}</strong>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Limite Disponível:</span>
+                    <strong className={getAvailableLimit(card) < 0 ? 'text-rose-400' : 'text-emerald-400'}>
+                      {formatCurrency(getAvailableLimit(card))}
+                    </strong>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Fecho da Fatura:</span>
