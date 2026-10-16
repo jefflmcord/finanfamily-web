@@ -226,8 +226,7 @@ export default function DashboardPage() {
       setSavingCard(false);
     }
   };
-
-  // Cadastrar Objetivo/Meta através da rota dedicada /api/goals
+  // Cadastrar Objetivo/Meta diretamente nas Transações (Contas a Pagar)
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!goalTitle || !goalTargetAmount || !goalMonths) return;
@@ -249,14 +248,30 @@ export default function DashboardPage() {
     setError('');
 
     try {
+      const totalVal = Number(goalTargetAmount.toString().replace(',', '.'));
+      const monthsCount = Number(goalMonths) || 1;
+      const today = new Date().toISOString().split('T')[0];
+
+      // Encontra o ID da categoria "Investimento" se já existir carregada, senão envia null
+      const invCategory = categories.find(c => c.name.toLowerCase() === 'investimento');
+
       const payload = {
         family_id: Number(resolvedFamilyId) || 1,
-        title: goalTitle.trim(),
-        target_amount: Number(goalTargetAmount.toString().replace(',', '.')),
-        months: Number(goalMonths) || 1
+        description: `Objetivo: ${goalTitle.trim()}`,
+        amount: totalVal,
+        type: 'EXPENSE',
+        payment_method: 'BOLETO',
+        account_id: accounts.length > 0 ? Number(accounts[0].id) : null,
+        credit_card_id: null,
+        category_id: invCategory ? Number(invCategory.id) : (categories.length > 0 ? Number(categories[0].id) : null),
+        transaction_date: today,
+        due_date: today,
+        total_installments: monthsCount,
+        start_installment: 1,
+        status: 'PENDING'
       };
 
-      const res = await fetch('https://finanfamily-api.onrender.com/api/goals', {
+      const res = await fetch('https://finanfamily-api.onrender.com/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -271,7 +286,7 @@ export default function DashboardPage() {
         setGoalMonths('12');
         await fetchData();
       } else {
-        setError(data.error || 'Erro ao criar objetivo.');
+        setError(data.error || 'Erro ao criar objetivo nas contas a pagar.');
       }
     } catch (err) {
       setError('Erro de conexão ao salvar objetivo.');
