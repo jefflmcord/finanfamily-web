@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import CreditCardList from '@/components/CreditCardList';
+import CategoriesManager from '@/components/CategoriesManager';
 import { getCardPurchaseDueDate } from '@/lib/creditCardBilling';
 import {
   Wallet, Loader2, PlusCircle, CreditCard, Target, LayoutDashboard, LogOut, X, 
@@ -1832,11 +1833,11 @@ export default function DashboardPage() {
           {activeModule === 'cadastros' && activeSubMenu === 'categorias' && (
             <div className="space-y-6">
               <h2 className="text-2xl font-extrabold text-white">Categorias Cadastradas</h2>
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-                <div className="divide-y divide-slate-800">
-                  {categories.map(cat => <div key={cat.id} className="py-3 flex justify-between items-center"><span className="text-white font-medium">{cat.name}</span><span className="text-xs uppercase bg-slate-800 text-slate-300 px-3 py-1 rounded-md">{cat.flow_type}</span></div>)}
-                </div>
-              </div>
+              <CategoriesManager
+                familyId={familyId}
+                apiUrl="https://finanfamily-api.onrender.com"
+                onUpdated={fetchData}
+              />
             </div>
           )}
 

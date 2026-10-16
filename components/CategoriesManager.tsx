@@ -5,9 +5,12 @@ import {
   Tag, 
   Plus, 
   Trash2, 
+  Pencil,
+  X,
   ArrowDownCircle, 
   ArrowUpCircle,
-  AlertCircle 
+  AlertCircle,
+  ShieldCheck
 } from 'lucide-react';
 
 interface CategoryItem {
@@ -16,37 +19,41 @@ interface CategoryItem {
   type: 'FIXED' | 'VARIABLE';
   flow_type: 'EXPENSE' | 'INCOME';
   color: string;
+  transaction_count: number;
 }
 
 interface CategoriesManagerProps {
+  familyId: string;
+  apiUrl?: string;
   onUpdated?: () => void;
 }
 
-export default function CategoriesManager({ onUpdated }: CategoriesManagerProps) {
+export default function CategoriesManager({ familyId, apiUrl = 'https://finanfamily-api.onrender.com', onUpdated }: CategoriesManagerProps) {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
+  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
 
   // Formulário
   const [name, setName] = useState('');
   const [costType, setCostType] = useState<'FIXED' | 'VARIABLE'>('VARIABLE');
   const [color, setColor] = useState('#10b981');
+  const [flowType, setFlowType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const familyId = process.env.NEXT_PUBLIC_FAMILY_ID || '0663962f-71e2-43e1-a8a5-0c017f68536d';
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${apiUrl}/api/categories?family_id=${familyId}`);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao carregar categorias.');
       if (Array.isArray(data)) {
         setCategories(data);
       }
     } catch (err) {
       console.error('Erro ao carregar categorias:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao carregar categorias.');
     } finally {
       setLoading(false);
     }
@@ -66,16 +73,25 @@ export default function CategoriesManager({ onUpdated }: CategoriesManagerProps)
         throw new Error('Informe o nome da categoria.');
       }
 
-      const res = await fetch(`${apiUrl}/api/categories`, {
-        method: 'POST',
+      const res = await fetch(editingCategory
+        ? `${apiUrl}/api/categories/${editingCategory.id}`
+        : `${apiUrl}/api/categories`, {
+        method: editingCategory ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          family_id: familyId,
-          name: name.trim(),
-          type: costType,
-          flow_type: activeTab,
-          color: color || '#10b981'
-        })
+        body: JSON.stringify(editingCategory
+          ? {
+              name: name.trim(),
+              type: costType,
+              flow_type: flowType,
+              color: color || '#10b981'
+            }
+          : {
+              family_id: familyId,
+              name: name.trim(),
+              type: costType,
+              flow_type: activeTab,
+              color: color || '#10b981'
+            })
       });
 
       const data = await res.json();
@@ -84,6 +100,7 @@ export default function CategoriesManager({ onUpdated }: CategoriesManagerProps)
       }
 
       setName('');
+      setEditingCategory(null);
       await loadCategories();
       if (onUpdated) onUpdated();
     } catch (err: any) {
@@ -94,16 +111,43 @@ export default function CategoriesManager({ onUpdated }: CategoriesManagerProps)
   }
 
   async function handleDeleteCategory(id: string) {
-    if (!confirm('Deseja realmente excluir esta categoria?')) return;
+    const category = categories.find(item => item.id === id);
+    if (!category || isInvestmentCategory(category) || Number(category.transaction_count) > 0) return;
+    if (!confirm(`Deseja realmente excluir a categoria "${category.name}"?`)) return;
     try {
       const res = await fetch(`${apiUrl}/api/categories/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await loadCategories();
-        if (onUpdated) onUpdated();
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao excluir categoria.');
+      setError(null);
+      await loadCategories();
+      if (onUpdated) onUpdated();
     } catch (err) {
-      console.error('Erro ao excluir categoria:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao excluir categoria.');
     }
+  }
+
+  function isInvestmentCategory(category: CategoryItem) {
+    return category.name.trim().toLocaleLowerCase('pt-BR') === 'investimento';
+  }
+
+  function handleEditCategory(category: CategoryItem) {
+    if (isInvestmentCategory(category)) return;
+    setEditingCategory(category);
+    setName(category.name);
+    setCostType(category.type || 'VARIABLE');
+    setColor(category.color || '#10b981');
+    setFlowType(category.flow_type || 'EXPENSE');
+    setActiveTab(category.flow_type || 'EXPENSE');
+    setError(null);
+  }
+
+  function resetForm() {
+    setEditingCategory(null);
+    setName('');
+    setCostType('VARIABLE');
+    setColor('#10b981');
+    setFlowType(activeTab);
+    setError(null);
   }
 
   const filteredCategories = categories.filter(
@@ -143,7 +187,7 @@ export default function CategoriesManager({ onUpdated }: CategoriesManagerProps)
       <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
         <h3 className="text-base font-bold text-white flex items-center gap-2 mb-1">
           <Tag className="w-5 h-5 text-emerald-400" />
-          Nova Categoria para {activeTab === 'EXPENSE' ? 'Contas a Pagar (Despesas)' : 'Contas a Receber (Receitas)'}
+          {editingCategory ? `Editar Categoria: ${editingCategory.name}` : `Nova Categoria para ${activeTab === 'EXPENSE' ? 'Contas a Pagar (Despesas)' : 'Contas a Receber (Receitas)'}`}
         </h3>
         <p className="text-xs text-slate-400 mb-4">
           {activeTab === 'EXPENSE' 
@@ -175,12 +219,37 @@ export default function CategoriesManager({ onUpdated }: CategoriesManagerProps)
             <label className="block text-xs font-medium text-slate-400 mb-1">Natureza</label>
             <select
               value={costType}
-              onChange={(e) => setCostType(e.target.value as any)}
+              onChange={(e) => setCostType(e.target.value as 'FIXED' | 'VARIABLE')}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
               <option value="VARIABLE">Variável (Eventual)</option>
               <option value="FIXED">Fixa (Recorrente todo mês)</option>
             </select>
+          </div>
+
+          {editingCategory && (
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Tipo de categoria</label>
+              <select
+                value={flowType}
+                disabled={Number(editingCategory.transaction_count) > 0}
+                onChange={(e) => setFlowType(e.target.value as 'EXPENSE' | 'INCOME')}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer disabled:opacity-50"
+              >
+                <option value="EXPENSE">Contas a Pagar</option>
+                <option value="INCOME">Contas a Receber</option>
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Cor</label>
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="w-full h-[34px] bg-slate-950 border border-slate-800 rounded-xl p-1 cursor-pointer"
+            />
           </div>
 
           <div>
@@ -189,10 +258,17 @@ export default function CategoriesManager({ onUpdated }: CategoriesManagerProps)
               disabled={saving}
               className="w-full flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-md"
             >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              {saving ? 'Gravando...' : 'Adicionar'}
+              {editingCategory ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4 stroke-[3]" />}
+              {saving ? 'Gravando...' : editingCategory ? 'Salvar alterações' : 'Adicionar'}
             </button>
           </div>
+          {editingCategory && (
+            <div className="sm:col-span-4 flex justify-end">
+              <button type="button" onClick={resetForm} className="flex items-center gap-1 text-xs text-slate-400 hover:text-white">
+                <X className="w-4 h-4" /> Cancelar edição
+              </button>
+            </div>
+          )}
         </form>
       </div>
 
@@ -204,6 +280,8 @@ export default function CategoriesManager({ onUpdated }: CategoriesManagerProps)
 
         {loading ? (
           <p className="text-xs text-slate-500 py-4">A carregar categorias...</p>
+        ) : error && categories.length === 0 ? (
+          <p className="text-xs text-rose-400 py-4">{error}</p>
         ) : filteredCategories.length === 0 ? (
           <p className="text-xs text-slate-500 py-4">Nenhuma categoria cadastrada nesta aba.</p>
         ) : (
@@ -223,16 +301,41 @@ export default function CategoriesManager({ onUpdated }: CategoriesManagerProps)
                     <span className="text-[10px] text-slate-500 uppercase">
                       {cat.type === 'FIXED' ? 'Fixa' : 'Variável'}
                     </span>
+                    {isInvestmentCategory(cat) ? (
+                      <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                        <ShieldCheck className="w-3 h-3" /> Protegida
+                      </span>
+                    ) : Number(cat.transaction_count) > 0 ? (
+                      <span className="text-[10px] text-slate-500">
+                        {cat.transaction_count} lançamento(s)
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleDeleteCategory(cat.id)}
-                  title="Excluir Categoria"
-                  className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center">
+                  {!isInvestmentCategory(cat) && (
+                    <>
+                      <button
+                        onClick={() => handleEditCategory(cat)}
+                        title="Editar categoria"
+                        aria-label={`Editar categoria ${cat.name}`}
+                        className="p-1.5 text-slate-500 hover:text-emerald-400 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(cat.id)}
+                        disabled={Number(cat.transaction_count) > 0}
+                        title={Number(cat.transaction_count) > 0 ? 'Não é possível excluir: há lançamentos vinculados' : 'Excluir categoria'}
+                        aria-label={`Excluir categoria ${cat.name}`}
+                        className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
