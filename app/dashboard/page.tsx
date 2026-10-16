@@ -35,12 +35,11 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [creditCards, setCreditCards] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [goals, setGoals] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [userName, setUserName] = useState('Família');
-  const [familyId, setFamilyId] = useState<string | number>('1');
+  const [familyId, setFamilyId] = useState<string>('1');
 
   // Modal de Novo Lançamento Avançado
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -93,19 +92,17 @@ export default function DashboardPage() {
     }
 
     try {
-      const [accRes, catRes, cardRes, txRes, goalRes] = await Promise.all([
+      const [accRes, catRes, cardRes, txRes] = await Promise.all([
         fetch(`https://finanfamily-api.onrender.com/api/accounts?family_id=${currentFamilyId}`),
         fetch(`https://finanfamily-api.onrender.com/api/categories?family_id=${currentFamilyId}`),
         fetch(`https://finanfamily-api.onrender.com/api/credit-cards?family_id=${currentFamilyId}`),
-        fetch(`https://finanfamily-api.onrender.com/api/transactions?family_id=${currentFamilyId}`),
-        fetch(`https://finanfamily-api.onrender.com/api/goals?family_id=${currentFamilyId}`),
+        fetch(`https://finanfamily-api.onrender.com/api/transactions?family_id=${currentFamilyId}`)
       ]);
 
       if (accRes.ok) setAccounts(await accRes.json());
       if (catRes.ok) setCategories(await catRes.json());
       if (cardRes.ok) setCreditCards(await cardRes.json());
       if (txRes.ok) setTransactions(await txRes.json());
-      if (goalRes.ok) setGoals(await goalRes.json());
     } catch (err) {
       setError('Erro de conexão ao carregar dados do servidor.');
     } finally {
@@ -127,12 +124,12 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!txDescription || !txAmount) return;
 
-    let resolvedFamilyId = Number(familyId || 1);
+    let resolvedFamilyId = familyId;
     const userStr = localStorage.getItem('@FinanFamily:user');
     if (userStr) {
       try {
         const userObj = JSON.parse(userStr);
-        resolvedFamilyId = Number(userObj.family_id || userObj.familyId || familyId || 1);
+        resolvedFamilyId = userObj.family_id || userObj.familyId || familyId;
       } catch (e) {}
     }
 
@@ -141,14 +138,14 @@ export default function DashboardPage() {
 
     try {
       const payload = {
-        family_id: resolvedFamilyId,
+        family_id: resolvedFamilyId, // Removido o Number() para respeitar o UUID
         description: txDescription.trim(),
         amount: Number(txAmount.toString().replace(',', '.')),
         type: txType,
         payment_method: txPaymentMethod,
-        account_id: txAccountId ? Number(txAccountId) : (accounts.length > 0 ? Number(accounts[0].id) : null),
-        credit_card_id: txCardId ? Number(txCardId) : null,
-        category_id: txCategoryId ? Number(txCategoryId) : null,
+        account_id: txAccountId ? txAccountId : (accounts.length > 0 ? accounts[0].id : null),
+        credit_card_id: txCardId ? txCardId : null,
+        category_id: txCategoryId ? txCategoryId : null,
         transaction_date: txTransactionDate,
         due_date: txDueDate,
         total_installments: Number(txTotalInstallments) || 1,
@@ -186,12 +183,12 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!cardName || !cardBrand || !cardLimit) return;
 
-    let resolvedFamilyId = Number(familyId || 1);
+    let resolvedFamilyId = familyId;
     const userStr = localStorage.getItem('@FinanFamily:user');
     if (userStr) {
       try {
         const userObj = JSON.parse(userStr);
-        resolvedFamilyId = Number(userObj.family_id || userObj.familyId || familyId || 1);
+        resolvedFamilyId = userObj.family_id || userObj.familyId || familyId;
       } catch (e) {}
     }
 
@@ -201,10 +198,10 @@ export default function DashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          family_id: resolvedFamilyId,
+          family_id: resolvedFamilyId, // Removido o Number()
           name: cardName,
           brand: cardBrand,
-          total_limit: cardLimit,
+          total_limit: Number(cardLimit.toString().replace(',', '.')),
           closing_day: Number(cardClosingDay),
           due_day: Number(cardDueDay),
         }),
@@ -226,21 +223,20 @@ export default function DashboardPage() {
       setSavingCard(false);
     }
   };
+
   // Cadastrar Objetivo/Meta diretamente nas Transações (Contas a Pagar)
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!goalTitle || !goalTargetAmount || !goalMonths) return;
 
-    let resolvedFamilyId = 1;
+    let resolvedFamilyId = familyId;
     if (typeof window !== 'undefined') {
       const userStr = localStorage.getItem('@FinanFamily:user');
       if (userStr) {
         try {
           const userObj = JSON.parse(userStr);
-          resolvedFamilyId = Number(userObj.family_id || userObj.familyId || 1);
-        } catch (e) {
-          resolvedFamilyId = 1;
-        }
+          resolvedFamilyId = userObj.family_id || userObj.familyId || familyId;
+        } catch (e) {}
       }
     }
 
@@ -252,18 +248,17 @@ export default function DashboardPage() {
       const monthsCount = Number(goalMonths) || 1;
       const today = new Date().toISOString().split('T')[0];
 
-      // Encontra o ID da categoria "Investimento" se já existir carregada, senão envia null
       const invCategory = categories.find(c => c.name.toLowerCase() === 'investimento');
 
       const payload = {
-        family_id: Number(resolvedFamilyId) || 1,
+        family_id: resolvedFamilyId, // Sem Number() para evitar erro de UUID
         description: `Objetivo: ${goalTitle.trim()}`,
         amount: totalVal,
         type: 'EXPENSE',
         payment_method: 'BOLETO',
-        account_id: accounts.length > 0 ? Number(accounts[0].id) : null,
+        account_id: accounts.length > 0 ? accounts[0].id : null, // Sem Number()
         credit_card_id: null,
-        category_id: invCategory ? Number(invCategory.id) : (categories.length > 0 ? Number(categories[0].id) : null),
+        category_id: invCategory ? invCategory.id : (categories.length > 0 ? categories[0].id : null), // Sem Number()
         transaction_date: today,
         due_date: today,
         total_installments: monthsCount,
@@ -319,6 +314,9 @@ export default function DashboardPage() {
 
   const sortedCategories = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1]).slice(0, 4);
   const maxCategoryAmount = sortedCategories.length > 0 ? sortedCategories[0][1] : 1;
+
+  // Filtrar transações para o painel de objetivos
+  const goalTransactions = transactions.filter(t => t.description.startsWith('Objetivo:'));
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col font-sans">
@@ -542,23 +540,23 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {goals.length > 0 ? (
-                  goals.map(g => (
-                    <div key={g.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+                {goalTransactions.length > 0 ? (
+                  goalTransactions.map(t => (
+                    <div key={t.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="text-lg font-bold text-white">{g.title}</p>
-                          <p className="text-xs text-slate-400 mt-1">Prazo: {g.months} meses</p>
+                          <p className="text-lg font-bold text-white">{t.description}</p>
+                          <p className="text-xs text-slate-400 mt-1">Vencimento da Parcela: {t.due_date}</p>
                         </div>
                         <Trophy className="w-8 h-8 text-emerald-400" />
                       </div>
                       <div className="border-t border-slate-800 pt-4 flex justify-between items-center">
                         <div>
-                          <p className="text-slate-400 text-xs uppercase">Valor Total Desejado</p>
-                          <p className="font-black text-white text-lg">{formatCurrency(g.target_amount)}</p>
+                          <p className="text-slate-400 text-xs uppercase">Valor da Parcela</p>
+                          <p className="font-black text-white text-lg">{formatCurrency(t.amount)}</p>
                         </div>
                         <span className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl font-bold">
-                          {formatCurrency(Number(g.target_amount) / Number(g.months))} / mês
+                          Parcela {t.installment_number}/{t.total_installments}
                         </span>
                       </div>
                     </div>
