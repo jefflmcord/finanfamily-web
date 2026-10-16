@@ -27,6 +27,7 @@ import {
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface Transaction {
   id: string;
@@ -118,8 +119,8 @@ export default function TransactionsList({
     setLoading(true);
     try {
       const [txRes, accRes] = await Promise.all([
-        fetch(`${apiUrl}/api/transactions?family_id=${familyId}&month=${month}&year=${year}`).then(r => r.json()),
-        fetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then(r => r.json())
+        authenticatedFetch(`${apiUrl}/api/transactions?family_id=${familyId}&month=${month}&year=${year}`).then(r => r.json()),
+        authenticatedFetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then(r => r.json())
       ]);
 
       if (Array.isArray(txRes)) setTransactions(txRes);
@@ -176,7 +177,7 @@ export default function TransactionsList({
     try {
       const finalVal = Number(String(paidAmount).replace(',', '.')) || payingItem.amount;
 
-      const res = await fetch(`${apiUrl}/api/transactions/${payingItem.id}/pay`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/transactions/${payingItem.id}/pay`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -217,7 +218,7 @@ export default function TransactionsList({
 
     setSubmittingReversal(true);
     try {
-      const res = await fetch(`${apiUrl}/api/transactions/${reversingItem.id}/reverse`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/transactions/${reversingItem.id}/reverse`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -255,7 +256,7 @@ export default function TransactionsList({
     try {
       const formattedAmount = Number(String(editAmount).replace(',', '.')) || 0;
 
-      const res = await fetch(`${apiUrl}/api/transactions/${editingItem.id}`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/transactions/${editingItem.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -287,7 +288,7 @@ export default function TransactionsList({
     setDeletingAll(true);
     try {
       const url = `${apiUrl}/api/transactions/${deletingItem.id}?delete_all_installments=${deleteAll}`;
-      const res = await fetch(url, { method: 'DELETE' });
+      const res = await authenticatedFetch(url, { method: 'DELETE' });
       const data = await res.json();
 
       if (!res.ok) {

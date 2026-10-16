@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Wallet, Plus, Trash2, Building2 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface Account {
   id: string;
@@ -27,7 +28,7 @@ export default function AccountsManager({ onUpdated }: AccountsManagerProps) {
 
   const loadAccounts = useCallback(async () => {
     try {
-      const res = await fetch(`${apiUrl}/api/accounts?family_id=${familyId}`);
+      const res = await authenticatedFetch(`${apiUrl}/api/accounts?family_id=${familyId}`);
       const data = await res.json();
       if (Array.isArray(data)) setAccounts(data);
     } catch (err) {
@@ -45,7 +46,7 @@ export default function AccountsManager({ onUpdated }: AccountsManagerProps) {
     setError(null);
     try {
       const balance = Number(String(initialBalance).replace(',', '.')) || 0;
-      const res = await fetch(`${apiUrl}/api/accounts`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/accounts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -75,7 +76,7 @@ export default function AccountsManager({ onUpdated }: AccountsManagerProps) {
   async function handleDelete(id: string) {
     if (!confirm('Deseja realmente excluir esta conta bancária?')) return;
     try {
-      const res = await fetch(`${apiUrl}/api/accounts/${id}`, { method: 'DELETE' });
+      const res = await authenticatedFetch(`${apiUrl}/api/accounts/${id}`, { method: 'DELETE' });
       if (res.ok) {
         await loadAccounts();
         onUpdated();

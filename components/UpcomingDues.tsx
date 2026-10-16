@@ -13,6 +13,7 @@ import {
   X,
   TrendingDown
 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface UpcomingTransaction {
   id: string;
@@ -55,8 +56,8 @@ export default function UpcomingDues({ month, year, onTransactionPaid }: Upcomin
     setLoading(true);
     try {
       const [txRes, accRes] = await Promise.all([
-        fetch(`${apiUrl}/api/transactions?family_id=${familyId}&month=${month}&year=${year}`).then((r) => r.json()),
-        fetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json())
+        authenticatedFetch(`${apiUrl}/api/transactions?family_id=${familyId}&month=${month}&year=${year}`).then((r) => r.json()),
+        authenticatedFetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json())
       ]);
 
       if (Array.isArray(txRes)) {
@@ -94,7 +95,7 @@ export default function UpcomingDues({ month, year, onTransactionPaid }: Upcomin
     try {
       const finalVal = Number(String(paidAmount).replace(',', '.')) || payingItem.amount;
 
-      const res = await fetch(`${apiUrl}/api/transactions/${payingItem.id}/pay`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/transactions/${payingItem.id}/pay`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

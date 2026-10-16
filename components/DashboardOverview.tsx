@@ -15,6 +15,7 @@ import {
   Calendar,
   AlertCircle
 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface CategoryShare {
   name: string;
@@ -112,7 +113,7 @@ export default function DashboardOverview({ data }: DashboardOverviewProps) {
     setInterestModalOpen(true);
     setLoadingInterest(true);
     try {
-      const res = await fetch(`${apiUrl}/api/dashboard/interest-metrics?family_id=${familyId}&month=${month}&year=${year}`);
+      const res = await authenticatedFetch(`${apiUrl}/api/dashboard/interest-metrics?family_id=${familyId}&month=${month}&year=${year}`);
       const list = await res.json();
       if (Array.isArray(list)) setInterestItems(list);
     } catch (err) {

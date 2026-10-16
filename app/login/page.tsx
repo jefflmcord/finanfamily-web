@@ -23,7 +23,10 @@ export default function LoginPage() {
       const res = await fetch(`${apiUrl}/api/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential }),
+        body: JSON.stringify({
+          credential,
+          invitation_token: new URLSearchParams(window.location.search).get('invite'),
+        }),
       });
       const data = await res.json();
 

@@ -10,6 +10,7 @@ import {
   AlertCircle,
   CalendarCheck
 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface NewTransactionModalProps {
   isOpen: boolean;
@@ -74,9 +75,9 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
   async function loadAuxiliaryData() {
     try {
       const [catRes, cardRes, accRes] = await Promise.all([
-        fetch(`${apiUrl}/api/categories?family_id=${familyId}`).then((r) => r.json()),
-        fetch(`${apiUrl}/api/credit-cards?family_id=${familyId}`).then((r) => r.json()),
-        fetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json())
+        authenticatedFetch(`${apiUrl}/api/categories?family_id=${familyId}`).then((r) => r.json()),
+        authenticatedFetch(`${apiUrl}/api/credit-cards?family_id=${familyId}`).then((r) => r.json()),
+        authenticatedFetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json())
       ]);
 
       if (Array.isArray(catRes)) setCategories(catRes);
@@ -169,7 +170,7 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
         start_installment: startInst
       };
 
-      const res = await fetch(`${apiUrl}/api/transactions`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

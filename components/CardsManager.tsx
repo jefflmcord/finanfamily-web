@@ -9,6 +9,7 @@ import {
   Calendar,
   DollarSign
 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface CardItem {
   id: string;
@@ -42,7 +43,7 @@ export default function CardsManager({ onUpdated }: CardsManagerProps) {
   const loadCards = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${apiUrl}/api/credit-cards?family_id=${familyId}`);
+      const res = await authenticatedFetch(`${apiUrl}/api/credit-cards?family_id=${familyId}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setCards(data);
@@ -72,7 +73,7 @@ export default function CardsManager({ onUpdated }: CardsManagerProps) {
         throw new Error('Informe um valor de limite válido.');
       }
 
-      const res = await fetch(`${apiUrl}/api/credit-cards`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/credit-cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,7 +109,7 @@ export default function CardsManager({ onUpdated }: CardsManagerProps) {
   async function handleDeleteCard(id: string) {
     if (!confirm('Deseja realmente excluir este cartão de crédito?')) return;
     try {
-      const res = await fetch(`${apiUrl}/api/credit-cards/${id}`, { method: 'DELETE' });
+      const res = await authenticatedFetch(`${apiUrl}/api/credit-cards/${id}`, { method: 'DELETE' });
       if (res.ok) {
         await loadCards();
         if (onUpdated) onUpdated();

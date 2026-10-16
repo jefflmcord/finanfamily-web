@@ -13,6 +13,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { getCurrentCardBillingPeriod, type CardBillingPeriod } from '@/lib/creditCardBilling';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface CardItem {
   id: string;
@@ -47,12 +48,16 @@ interface CreditCardListProps {
   familyId?: string;
   refreshTrigger?: number;
   onInvoicePaid?: () => void;
+  canManageCards?: boolean;
+  canSettleTransactions?: boolean;
 }
 
 export default function CreditCardList({ 
   familyId: familyIdProp,
   refreshTrigger, 
-  onInvoicePaid 
+  onInvoicePaid,
+  canManageCards = true,
+  canSettleTransactions = true,
 }: CreditCardListProps) {
   const [cards, setCards] = useState<CardItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -89,9 +94,9 @@ export default function CreditCardList({
     setLoading(true);
     try {
       const [cardsRes, accsRes, transactionsRes] = await Promise.all([
-        fetch(`${apiUrl}/api/credit-cards?family_id=${familyId}`).then((r) => r.json()),
-        fetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json()),
-        fetch(`${apiUrl}/api/transactions?family_id=${familyId}`).then((r) => r.json())
+        authenticatedFetch(`${apiUrl}/api/credit-cards?family_id=${familyId}`).then((r) => r.json()),
+        authenticatedFetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json()),
+        authenticatedFetch(`${apiUrl}/api/transactions?family_id=${familyId}`).then((r) => r.json())
       ]);
 
       if (Array.isArray(cardsRes)) setCards(cardsRes);
@@ -162,7 +167,7 @@ export default function CreditCardList({
     setSavingCard(true);
     setCardActionError('');
     try {
-      const res = await fetch(`${apiUrl}/api/credit-cards/${editingCard.id}`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/credit-cards/${editingCard.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -187,7 +192,7 @@ export default function CreditCardList({
     setDeletingCardId(card.id);
     setCardActionError('');
     try {
-      const res = await fetch(`${apiUrl}/api/credit-cards/${card.id}`, { method: 'DELETE' });
+      const res = await authenticatedFetch(`${apiUrl}/api/credit-cards/${card.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao excluir o cartão.');
 
@@ -238,7 +243,7 @@ export default function CreditCardList({
     const paidIds: string[] = [];
     try {
       for (const item of pendingItems) {
-        const res = await fetch(`${apiUrl}/api/transactions/${item.id}/pay`, {
+        const res = await authenticatedFetch(`${apiUrl}/api/transactions/${item.id}/pay`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -300,7 +305,7 @@ export default function CreditCardList({
                     <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">
                       Vence dia {card.due_day}
                     </span>
-                    <button
+                    {canManageCards && <button
                       type="button"
                       onClick={() => handleOpenEditCard(card)}
                       title="Editar cartão"
@@ -308,8 +313,8 @@ export default function CreditCardList({
                       className="p-1.5 text-slate-400 hover:text-indigo-300 rounded-lg transition-colors cursor-pointer"
                     >
                       <Pencil className="w-4 h-4" />
-                    </button>
-                    {getPendingTransactionCount(card.id) === 0 && (
+                    </button>}
+                    {canManageCards && getPendingTransactionCount(card.id) === 0 && (
                       <button
                         type="button"
                         onClick={() => handleDeleteCard(card)}
@@ -346,7 +351,7 @@ export default function CreditCardList({
                 className="w-full flex items-center justify-center gap-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold py-2 rounded-xl transition-colors cursor-pointer"
               >
                 <Receipt className="w-3.5 h-3.5" />
-                Pagar fatura
+                {canSettleTransactions ? 'Pagar fatura' : 'Ver fatura'}
               </button>
             </div>
           ))}
@@ -435,14 +440,14 @@ export default function CreditCardList({
                   </div>
                 ) : (
                   <>
-                    {!showPaymentForm ? (
+                    {canSettleTransactions && !showPaymentForm ? (
                       <button
                         onClick={() => setShowPaymentForm(true)}
                         className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
                       >
                         Baixar todos os lançamentos pendentes
                       </button>
-                    ) : (
+                    ) : canSettleTransactions ? (
                       <form onSubmit={handlePayInvoice} className="space-y-3 pt-2 border-t border-slate-800">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
@@ -493,6 +498,10 @@ export default function CreditCardList({
                           </div>
                         )}
                       </form>
+                    ) : (
+                      <p className="rounded-xl bg-slate-950 p-3 text-center text-xs text-slate-400">
+                        Você pode consultar a fatura, mas não tem permissão para baixá-la.
+                      </p>
                     )}
                   </>
                 )}

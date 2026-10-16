@@ -12,6 +12,7 @@ import {
   AlertCircle,
   ShieldCheck
 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface CategoryItem {
   id: string;
@@ -26,9 +27,10 @@ interface CategoriesManagerProps {
   familyId: string;
   apiUrl?: string;
   onUpdated?: () => void;
+  canManage?: boolean;
 }
 
-export default function CategoriesManager({ familyId, apiUrl = 'https://finanfamily-api.onrender.com', onUpdated }: CategoriesManagerProps) {
+export default function CategoriesManager({ familyId, apiUrl = 'https://finanfamily-api.onrender.com', onUpdated, canManage = true }: CategoriesManagerProps) {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
@@ -45,7 +47,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
   const loadCategories = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${apiUrl}/api/categories?family_id=${familyId}`);
+      const res = await authenticatedFetch(`${apiUrl}/api/categories?family_id=${familyId}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao carregar categorias.');
       if (Array.isArray(data)) {
@@ -73,7 +75,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
         throw new Error('Informe o nome da categoria.');
       }
 
-      const res = await fetch(editingCategory
+      const res = await authenticatedFetch(editingCategory
         ? `${apiUrl}/api/categories/${editingCategory.id}`
         : `${apiUrl}/api/categories`, {
         method: editingCategory ? 'PUT' : 'POST',
@@ -115,7 +117,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
     if (!category || isInvestmentCategory(category) || Number(category.transaction_count) > 0) return;
     if (!confirm(`Deseja realmente excluir a categoria "${category.name}"?`)) return;
     try {
-      const res = await fetch(`${apiUrl}/api/categories/${id}`, { method: 'DELETE' });
+      const res = await authenticatedFetch(`${apiUrl}/api/categories/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao excluir categoria.');
       setError(null);
@@ -184,7 +186,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
       </div>
 
       {/* Formulário de Cadastro */}
-      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
+      {canManage && <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
         <h3 className="text-base font-bold text-white flex items-center gap-2 mb-1">
           <Tag className="w-5 h-5 text-emerald-400" />
           {editingCategory ? `Editar Categoria: ${editingCategory.name}` : `Nova Categoria para ${activeTab === 'EXPENSE' ? 'Contas a Pagar (Despesas)' : 'Contas a Receber (Receitas)'}`}
@@ -270,7 +272,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
             </div>
           )}
         </form>
-      </div>
+      </div>}
 
       {/* Grid de Categorias Cadastradas */}
       <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
@@ -313,7 +315,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
                   </div>
                 </div>
 
-                <div className="flex items-center">
+                {canManage && <div className="flex items-center">
                   {!isInvestmentCategory(cat) && (
                     <>
                       <button
@@ -335,7 +337,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
                       </button>
                     </>
                   )}
-                </div>
+                </div>}
               </div>
             ))}
           </div>

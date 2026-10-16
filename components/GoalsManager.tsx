@@ -17,6 +17,7 @@ import {
   Building2,
   AlertTriangle
 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface Goal {
   id: string;
@@ -73,8 +74,8 @@ export default function GoalsManager({ onUpdated }: GoalsManagerProps) {
     setLoading(true);
     try {
       const [goalsRes, accsRes] = await Promise.all([
-        fetch(`${apiUrl}/api/goals?family_id=${familyId}`).then((r) => r.json()),
-        fetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json())
+        authenticatedFetch(`${apiUrl}/api/goals?family_id=${familyId}`).then((r) => r.json()),
+        authenticatedFetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json())
       ]);
 
       if (Array.isArray(goalsRes)) setGoals(goalsRes);
@@ -134,7 +135,7 @@ export default function GoalsManager({ onUpdated }: GoalsManagerProps) {
       const target = Number(String(targetAmount).replace(',', '.')) || 0;
       const monthly = Number(String(monthlyContribution).replace(',', '.')) || 0;
 
-      const res = await fetch(`${apiUrl}/api/goals`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/goals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -175,7 +176,7 @@ export default function GoalsManager({ onUpdated }: GoalsManagerProps) {
     try {
       const amount = Number(String(contributionAmount).replace(',', '.')) || 0;
 
-      const res = await fetch(`${apiUrl}/api/goals/${contributingGoal.id}/contribution`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/goals/${contributingGoal.id}/contribution`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -207,7 +208,7 @@ export default function GoalsManager({ onUpdated }: GoalsManagerProps) {
 
     setIsDeleting(true);
     try {
-      const res = await fetch(`${apiUrl}/api/goals/${deletingGoal.id}`, { method: 'DELETE' });
+      const res = await authenticatedFetch(`${apiUrl}/api/goals/${deletingGoal.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Erro ao excluir');

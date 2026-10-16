@@ -7,13 +7,15 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import CreditCardList from '@/components/CreditCardList';
 import CategoriesManager from '@/components/CategoriesManager';
+import FamilyMembersManager from '@/components/FamilyMembersManager';
+import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import { getCardPurchaseDueDate } from '@/lib/creditCardBilling';
 import {
   Wallet, Loader2, PlusCircle, CreditCard, Target, LayoutDashboard, LogOut, X, 
   CheckCircle2, FileText, DollarSign, Layers, PieChart as PieIcon, 
   BarChart3, Trophy, Edit, Trash2, AlertTriangle, Calendar, Filter, Circle, CheckCircle, AlertCircle,
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Sparkles, Clock,
-  Printer, FileDown, FileSpreadsheet, Menu, Plus, User
+  Printer, FileDown, FileSpreadsheet, Menu, Plus, User, Users
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -34,6 +36,7 @@ export default function DashboardPage() {
   const [userEmail, setUserEmail] = useState('');
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [familyId, setFamilyId] = useState<string>('1');
+  const [familyAccess, setFamilyAccess] = useState<{ familyId: string; role: 'OWNER' | 'MEMBER'; permissions: Record<string, boolean> } | null>(null);
 
   // Filtros do Dashboard Inicial (Visão Geral)
   const [dashboardYear, setDashboardYear] = useState<number | 'ALL'>(new Date().getFullYear());
@@ -96,7 +99,8 @@ export default function DashboardPage() {
       return;
     }
 
-    let currentFamilyId = '1';
+    setLoading(true);
+    setError('');
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
@@ -109,25 +113,43 @@ export default function DashboardPage() {
               ? user.picture
               : null
         );
-        currentFamilyId = String(user.family_id || user.familyId || '1');
-        setFamilyId(currentFamilyId);
-      } catch (e) {}
+      } catch (parseError) {
+        console.error('Não foi possível ler o perfil salvo da sessão:', parseError);
+      }
     }
 
     try {
-      const [accRes, catRes, cardRes, txRes] = await Promise.all([
-        fetch(`https://finanfamily-api.onrender.com/api/accounts?family_id=${currentFamilyId}`),
-        fetch(`https://finanfamily-api.onrender.com/api/categories?family_id=${currentFamilyId}`),
-        fetch(`https://finanfamily-api.onrender.com/api/credit-cards?family_id=${currentFamilyId}`),
-        fetch(`https://finanfamily-api.onrender.com/api/transactions?family_id=${currentFamilyId}`)
-      ]);
+      const accessRes = await authenticatedFetch(`${API_URL}/api/family/access`);
+      const accessData = await accessRes.json();
+      if (!accessRes.ok) throw new Error(accessData.error || 'Não foi possível validar suas permissões.');
+      setFamilyAccess(accessData);
+      setFamilyId(String(accessData.familyId));
 
-      if (accRes.ok) setAccounts(await accRes.json());
-      if (catRes.ok) setCategories(await catRes.json());
-      if (cardRes.ok) setCreditCards(await cardRes.json());
-      if (txRes.ok) setTransactions(await txRes.json());
+      if (accessData.role !== 'OWNER' && accessData.permissions?.family_read !== true) {
+        setAccounts([]);
+        setCategories([]);
+        setCreditCards([]);
+        setTransactions([]);
+        return;
+      }
+
+      const dataResponses = await Promise.all([
+        authenticatedFetch(`${API_URL}/api/accounts?family_id=${encodeURIComponent(accessData.familyId)}`),
+        authenticatedFetch(`${API_URL}/api/categories?family_id=${encodeURIComponent(accessData.familyId)}`),
+        authenticatedFetch(`${API_URL}/api/credit-cards?family_id=${encodeURIComponent(accessData.familyId)}`),
+        authenticatedFetch(`${API_URL}/api/transactions?family_id=${encodeURIComponent(accessData.familyId)}`)
+      ]);
+      const data = await Promise.all(dataResponses.map(async response => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Não foi possível carregar os dados da família.');
+        return result;
+      }));
+      setAccounts(data[0]);
+      setCategories(data[1]);
+      setCreditCards(data[2]);
+      setTransactions(data[3]);
     } catch (err) {
-      setError('Erro de conexão ao carregar dados.');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar os dados da família.');
     } finally {
       setLoading(false);
     }
@@ -159,12 +181,12 @@ export default function DashboardPage() {
 
   // APAGAR TRANSAÇÃO
   const handleDeleteTx = async () => {
-    if (!txToDelete) return;
+    if (!txToDelete || !canDeleteTransactions) return;
     try {
       const parentId = txToDelete.parent_transaction_id || txToDelete.id;
       const url = `https://finanfamily-api.onrender.com/api/transactions/${txToDelete.id}?scope=${deleteScope}&parent_id=${parentId}`;
       
-      const res = await fetch(url, { method: 'DELETE' });
+      const res = await authenticatedFetch(url, { method: 'DELETE' });
       if (res.ok) {
         setIsDeleteModalOpen(false);
         setTxToDelete(null);
@@ -179,6 +201,7 @@ export default function DashboardPage() {
   };
 
   const openDeleteModal = (tx: any, scope: 'single' | 'all' = 'single') => {
+    if (!canDeleteTransactions) return;
     setTxToDelete(tx);
     setDeleteScope(scope);
     setIsDeleteModalOpen(true);
@@ -186,6 +209,7 @@ export default function DashboardPage() {
 
   // EDITAR TRANSAÇÃO
   const openEditModal = (tx: any) => {
+    if (!canEditTransactions) return;
     setEditingTx(tx);
     setTxType(tx.type === 'INCOME' ? 'INCOME' : 'EXPENSE');
     setTxDescription(tx.description);
@@ -200,7 +224,7 @@ export default function DashboardPage() {
 
   const handleUpdateTx = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingTx) return;
+    if (!editingTx || !canEditTransactions) return;
     const matchingCategories = categories.filter(category => category.flow_type === editingTx.type);
     if (matchingCategories.length > 0 && !matchingCategories.some(category => String(category.id) === String(txCategoryId))) {
       setError('Selecione uma categoria válida para este lançamento.');
@@ -218,7 +242,7 @@ export default function DashboardPage() {
         status: editingTx.status
       };
 
-      const res = await fetch(`https://finanfamily-api.onrender.com/api/transactions/${editingTx.id}`, {
+      const res = await authenticatedFetch(`${API_URL}/api/transactions/${editingTx.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -229,41 +253,30 @@ export default function DashboardPage() {
         setEditingTx(null);
         await fetchData();
       } else {
-        setError('Erro ao atualizar transação.');
+        const data = await res.json();
+        setError(data.error || 'Erro ao atualizar transação.');
       }
-    } catch (e) {
-      setError('Erro de conexão.');
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Erro ao atualizar transação.');
     }
   };
 
   const updateTransactionStatus = async (tx: any, status: 'PAID' | 'PENDING') => {
-    try {
-      const payload = {
-        description: tx.description,
-        amount: tx.amount,
-        due_date: tx.due_date ? tx.due_date.split('T')[0] : '',
-        category_id: tx.category_id || null,
-        account_id: tx.account_id || null,
-        payment_method: tx.payment_method || 'BOLETO',
-        status
-      };
-
-      const res = await fetch(`https://finanfamily-api.onrender.com/api/transactions/${tx.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        throw new Error('Erro ao atualizar o lançamento.');
-      }
-    } catch (err) {
-      throw err;
+    if (status === 'PAID') {
+      await payTransaction(tx);
+      return;
     }
+
+    const response = await authenticatedFetch(`${API_URL}/api/transactions/${tx.id}/unpay`, {
+      method: 'PATCH',
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Erro ao estornar o lançamento.');
   };
 
   const payTransaction = async (tx: any) => {
-    const res = await fetch(`https://finanfamily-api.onrender.com/api/transactions/${tx.id}/pay`, {
+    if (!canSettleTransactions) throw new Error('Você não tem permissão para baixar lançamentos.');
+    const res = await authenticatedFetch(`${API_URL}/api/transactions/${tx.id}/pay`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -285,18 +298,21 @@ export default function DashboardPage() {
 
   // MARCAR COMO PAGO / PENDENTE RÁPIDO
   const handleToggleStatus = async (tx: any) => {
+    if (!canSettleTransactions) return;
     const newStatus = tx.status === 'PAID' ? 'PENDING' : 'PAID';
+    setError('');
     try {
       await updateTransactionStatus(tx, newStatus);
       setSelectedExpenseIds(ids => ids.filter(id => id !== String(tx.id)));
       await fetchData();
-    } catch (e) {
-      setError('Erro ao atualizar status.');
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : 'Erro ao atualizar status.');
     }
   };
 
   const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreateTransactions) return;
     if (!txDescription || !txAmount) return;
     const matchingCategories = categories.filter(category => category.flow_type === txType);
     if (matchingCategories.length > 0 && !matchingCategories.some(category => String(category.id) === String(txCategoryId))) {
@@ -310,7 +326,9 @@ export default function DashboardPage() {
       try {
         const userObj = JSON.parse(userStr);
         resolvedFamilyId = userObj.family_id || userObj.familyId || familyId;
-      } catch (e) {}
+      } catch (parseError) {
+        console.error('Não foi possível ler o perfil salvo da sessão:', parseError);
+      }
     }
 
     setSavingTx(true);
@@ -340,7 +358,7 @@ export default function DashboardPage() {
         status: 'PENDING'
       };
 
-      const res = await fetch('https://finanfamily-api.onrender.com/api/transactions', {
+      const res = await authenticatedFetch(`${API_URL}/api/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -354,9 +372,12 @@ export default function DashboardPage() {
         setTxTotalInstallments('1');
         setTxStartInstallment('1');
         await fetchData();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Erro ao salvar lançamento.');
       }
-    } catch (err) {
-      setError('Erro de conexão ao salvar transação.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Erro ao salvar transação.');
     } finally {
       setSavingTx(false);
     }
@@ -364,6 +385,7 @@ export default function DashboardPage() {
 
   const handleSaveCard = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageCards) return;
     if (!cardName || !cardBrand || !cardLimit) return;
 
     let resolvedFamilyId = familyId;
@@ -372,12 +394,14 @@ export default function DashboardPage() {
       try {
         const userObj = JSON.parse(userStr);
         resolvedFamilyId = userObj.family_id || userObj.familyId || familyId;
-      } catch (e) {}
+      } catch (parseError) {
+        console.error('Não foi possível ler o perfil salvo da sessão:', parseError);
+      }
     }
 
     setSavingCard(true);
     try {
-      const res = await fetch('https://finanfamily-api.onrender.com/api/credit-cards', {
+      const res = await authenticatedFetch(`${API_URL}/api/credit-cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -396,9 +420,12 @@ export default function DashboardPage() {
         setCardBrand('');
         setCardLimit('');
         await fetchData();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Erro ao salvar cartão.');
       }
-    } catch (e) {
-      setError('Erro ao salvar cartão.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Erro ao salvar cartão.');
     } finally {
       setSavingCard(false);
     }
@@ -406,8 +433,10 @@ export default function DashboardPage() {
 
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageGoals) return;
     if (!goalTitle || !goalTargetAmount || !goalMonths) return;
     setSavingGoal(true);
+    setError('');
     
     let resolvedFamilyId = familyId;
     if (typeof window !== 'undefined') {
@@ -416,7 +445,9 @@ export default function DashboardPage() {
         try {
           const userObj = JSON.parse(userStr);
           resolvedFamilyId = userObj.family_id || userObj.familyId || familyId;
-        } catch (e) {}
+        } catch (parseError) {
+          console.error('Não foi possível ler o perfil salvo da sessão:', parseError);
+        }
       }
     }
 
@@ -440,7 +471,7 @@ export default function DashboardPage() {
         status: 'PENDING'
       };
 
-      const res = await fetch('https://finanfamily-api.onrender.com/api/transactions', {
+      const res = await authenticatedFetch(`${API_URL}/api/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -453,15 +484,47 @@ export default function DashboardPage() {
         setGoalMonths('12');
         setGoalStartDate(new Date().toISOString().split('T')[0]);
         await fetchData();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Erro ao salvar objetivo.');
       }
-    } catch (err) {} finally { setSavingGoal(false); }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Erro ao salvar objetivo.');
+    } finally {
+      setSavingGoal(false);
+    }
   };
+
+  const hasFamilyPermission = (permission: string) =>
+    familyAccess?.role === 'OWNER' || familyAccess?.permissions[permission] === true;
+  const canReadFamily = hasFamilyPermission('family_read');
+  const canCreateTransactions = hasFamilyPermission('transactions_create');
+  const canEditTransactions = hasFamilyPermission('transactions_edit');
+  const canDeleteTransactions = hasFamilyPermission('transactions_delete');
+  const canSettleTransactions = hasFamilyPermission('transactions_settle');
+  const canManageCards = hasFamilyPermission('cards_manage');
+  const canManageCategories = hasFamilyPermission('categories_manage');
+  const canManageGoals = hasFamilyPermission('goals_manage');
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
         <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
         <p className="text-slate-400 font-medium">A carregar inteligência financeira...</p>
+      </div>
+    );
+  }
+
+  if (!familyAccess || !canReadFamily) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 text-center text-slate-50">
+        <Users className="mb-4 h-12 w-12 text-emerald-400" />
+        <h1 className="text-xl font-bold">{familyAccess ? 'Acesso às informações não autorizado' : 'Não foi possível validar seu acesso'}</h1>
+        <p className="mt-2 max-w-md text-sm text-slate-400">
+          {familyAccess ? 'Peça ao responsável da família para habilitar a consulta dos dados.' : 'Tente entrar novamente. Se o problema continuar, contate o responsável da família.'}
+        </p>
+        {error && <p role="alert" className="mt-4 text-sm text-rose-300">{error}</p>}
+        <button onClick={() => { localStorage.clear(); router.push('/login'); }} className="mt-6 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white">Sair</button>
       </div>
     );
   }
@@ -923,7 +986,7 @@ export default function DashboardPage() {
   };
 
   const handlePayExpenses = async (expenses: any[]) => {
-    if (expenses.length === 0) return;
+    if (!canSettleTransactions || expenses.length === 0) return;
 
     setPayingExpenses(true);
     setError('');
@@ -960,17 +1023,23 @@ export default function DashboardPage() {
       <div key={t.id} className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
         <div className="flex items-center gap-4 min-w-0">
           {isIncome ? (
-            <button
-              onClick={() => handleToggleStatus(t)}
-              title={isPaid ? 'Marcar como pendente' : 'Marcar como pago'}
-              aria-label={isPaid ? `Marcar ${t.description} como pendente` : `Marcar ${t.description} como pago`}
-              className={`flex-shrink-0 p-2 -ml-2 transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
-            >
-              {isPaid ? <CheckCircle className="w-7 h-7" /> : isOverdue ? <AlertCircle className="w-7 h-7" /> : <Circle className="w-7 h-7" />}
-            </button>
+            canSettleTransactions ? (
+              <button
+                onClick={() => handleToggleStatus(t)}
+                title={isPaid ? 'Marcar como pendente' : 'Marcar como pago'}
+                aria-label={isPaid ? `Marcar ${t.description} como pendente` : `Marcar ${t.description} como pago`}
+                className={`flex-shrink-0 p-2 -ml-2 transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
+              >
+                {isPaid ? <CheckCircle className="w-7 h-7" /> : isOverdue ? <AlertCircle className="w-7 h-7" /> : <Circle className="w-7 h-7" />}
+              </button>
+            ) : isPaid ? (
+              <CheckCircle className="w-7 h-7 flex-shrink-0 text-emerald-500" aria-label="Lançamento recebido" />
+            ) : (
+              <Circle className="w-7 h-7 flex-shrink-0 text-slate-600" aria-label="Lançamento pendente" />
+            )
           ) : isPaid ? (
             <CheckCircle className="w-7 h-7 flex-shrink-0 text-emerald-500" aria-label="Lançamento pago" />
-          ) : (
+          ) : canSettleTransactions ? (
             <button
               type="button"
               role="checkbox"
@@ -983,6 +1052,8 @@ export default function DashboardPage() {
             >
               {isSelected ? <CheckCircle className="w-7 h-7" /> : isOverdue ? <AlertCircle className="w-7 h-7" /> : <Circle className="w-7 h-7" />}
             </button>
+          ) : (
+            <Circle className="w-7 h-7 flex-shrink-0 text-slate-600" aria-label="Lançamento pendente" />
           )}
           
           <div className="min-w-0">
@@ -1011,7 +1082,7 @@ export default function DashboardPage() {
             {formatCurrency(t.amount)}
           </span>
           <div className="flex items-center gap-2">
-            {!isIncome && !isPaid && (
+            {!isIncome && !isPaid && canSettleTransactions && (
               <button
                 onClick={() => handlePayExpenses([t])}
                 disabled={payingExpenses}
@@ -1020,10 +1091,10 @@ export default function DashboardPage() {
                 <CheckCircle2 className="w-4 h-4" /> Baixar
               </button>
             )}
-            <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-              <button onClick={() => openEditModal(t)} aria-label={`Editar ${t.description}`} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm"><Edit className="w-4 h-4" /></button>
-              <button onClick={() => openDeleteModal(t)} aria-label={`Excluir ${t.description}`} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>
-            </div>
+            {(canEditTransactions || canDeleteTransactions) && <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              {canEditTransactions && <button onClick={() => openEditModal(t)} aria-label={`Editar ${t.description}`} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm"><Edit className="w-4 h-4" /></button>}
+              {canDeleteTransactions && <button onClick={() => openDeleteModal(t)} aria-label={`Excluir ${t.description}`} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>}
+            </div>}
           </div>
         </div>
       </div>
@@ -1089,12 +1160,14 @@ export default function DashboardPage() {
         </div>
         <nav className="hidden md:flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
           <button onClick={() => { setActiveModule('cadastros'); setActiveSubMenu('geral'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'cadastros' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Cadastros</button>
-          <button onClick={() => { setActiveModule('pagar'); setActiveSubMenu('contas_pagar'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'pagar' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Contas a Pagar</button>
-          <button onClick={() => { setActiveModule('receber'); setActiveSubMenu('contas_receber'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'receber' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Contas a Receber</button>
-          <button onClick={() => { setActiveModule('investimentos'); setActiveSubMenu('metas'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'investimentos' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Investimentos</button>
+          {familyAccess?.permissions.family_read && <>
+            <button onClick={() => { setActiveModule('pagar'); setActiveSubMenu('contas_pagar'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'pagar' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Contas a Pagar</button>
+            <button onClick={() => { setActiveModule('receber'); setActiveSubMenu('contas_receber'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'receber' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Contas a Receber</button>
+            <button onClick={() => { setActiveModule('investimentos'); setActiveSubMenu('metas'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'investimentos' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Investimentos</button>
+          </>}
         </nav>
         <div className="flex items-center gap-1 sm:gap-4">
-          <button onClick={() => setIsTxModalOpen(true)} className="hidden md:flex bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-5 rounded-xl shadow-lg items-center gap-2 cursor-pointer transition-all"><PlusCircle className="w-5 h-5" /> Novo Lançamento</button>
+          {canCreateTransactions && <button onClick={() => { setTxType(activeModule === 'receber' ? 'INCOME' : 'EXPENSE'); setIsTxModalOpen(true); }} className="hidden md:flex bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-5 rounded-xl shadow-lg items-center gap-2 cursor-pointer transition-all"><PlusCircle className="w-5 h-5" /> Novo Lançamento</button>}
           <div className="flex min-w-0 items-center gap-2 sm:gap-3 sm:pl-3 sm:border-l sm:border-slate-800">
             {userAvatarUrl ? (
               <img
@@ -1144,14 +1217,19 @@ export default function DashboardPage() {
           {activeModule === 'cadastros' && (
             <>
               <button onClick={() => { setActiveSubMenu('geral'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'geral' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><LayoutDashboard className="w-5 h-5" /> Visão Geral</button>
-              <button onClick={() => { setActiveSubMenu('cartoes'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'cartoes' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><CreditCard className="w-5 h-5" /> Cartões</button>
-              <button onClick={() => { setActiveSubMenu('contas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Wallet className="w-5 h-5" /> Contas</button>
-              <button onClick={() => { setActiveSubMenu('categorias'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'categorias' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Layers className="w-5 h-5" /> Categorias</button>
+              {canReadFamily && <>
+                <button onClick={() => { setActiveSubMenu('cartoes'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'cartoes' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><CreditCard className="w-5 h-5" /> Cartões</button>
+                <button onClick={() => { setActiveSubMenu('contas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Wallet className="w-5 h-5" /> Contas</button>
+                <button onClick={() => { setActiveSubMenu('categorias'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'categorias' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Layers className="w-5 h-5" /> Categorias</button>
+              </>}
+              {familyAccess?.role === 'OWNER' && (
+                <button onClick={() => { setActiveSubMenu('membros'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'membros' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Users className="w-5 h-5" /> Membros da família</button>
+              )}
             </>
           )}
-          {activeModule === 'pagar' && <button onClick={() => { setActiveSubMenu('contas_pagar'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><FileText className="w-5 h-5" /> Lançamentos a Pagar</button>}
-          {activeModule === 'receber' && <button onClick={() => { setActiveSubMenu('contas_receber'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><DollarSign className="w-5 h-5" /> Lançamentos a Receber</button>}
-          {activeModule === 'investimentos' && <button onClick={() => { setActiveSubMenu('metas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Target className="w-5 h-5" /> Metas & Objetivos</button>}
+          {activeModule === 'pagar' && canReadFamily && <button onClick={() => { setActiveSubMenu('contas_pagar'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><FileText className="w-5 h-5" /> Lançamentos a Pagar</button>}
+          {activeModule === 'receber' && canReadFamily && <button onClick={() => { setActiveSubMenu('contas_receber'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><DollarSign className="w-5 h-5" /> Lançamentos a Receber</button>}
+          {activeModule === 'investimentos' && canReadFamily && <button onClick={() => { setActiveSubMenu('metas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Target className="w-5 h-5" /> Metas & Objetivos</button>}
         </aside>
 
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-10 pb-24 md:pb-10 max-w-7xl w-full mx-auto space-y-6 md:space-y-8">
@@ -2024,14 +2102,14 @@ export default function DashboardPage() {
                             <span className="text-sm font-black text-rose-400">
                               {formatCurrency(tx.amount)}
                             </span>
-                            <button
+                            {canSettleTransactions && <button
                               type="button"
                               onClick={() => handlePayExpenses([tx])}
                               disabled={payingExpenses}
                               className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-colors cursor-pointer disabled:opacity-50"
                             >
                               Baixar
-                            </button>
+                            </button>}
                           </div>
                         </div>
                       );
@@ -2050,8 +2128,8 @@ export default function DashboardPage() {
 
           {activeModule === 'cadastros' && activeSubMenu === 'cartoes' && (
             <div className="space-y-6">
-              <div className="flex flex-wrap justify-between items-center gap-3"><h2 className="text-xl sm:text-2xl font-extrabold text-white">Cartões de Crédito</h2><button onClick={() => setIsCardModalOpen(true)} className="bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl">+ Novo Cartão</button></div>
-              <CreditCardList familyId={familyId} refreshTrigger={creditCards.length + transactions.length} onInvoicePaid={fetchData} />
+              <div className="flex flex-wrap justify-between items-center gap-3"><h2 className="text-xl sm:text-2xl font-extrabold text-white">Cartões de Crédito</h2>{canManageCards && <button onClick={() => setIsCardModalOpen(true)} className="bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl">+ Novo Cartão</button>}</div>
+              <CreditCardList familyId={familyId} refreshTrigger={creditCards.length + transactions.length} onInvoicePaid={fetchData} canManageCards={canManageCards} canSettleTransactions={canSettleTransactions} />
             </div>
           )}
 
@@ -2069,10 +2147,15 @@ export default function DashboardPage() {
               <h2 className="text-2xl font-extrabold text-white">Categorias Cadastradas</h2>
               <CategoriesManager
                 familyId={familyId}
-                apiUrl="https://finanfamily-api.onrender.com"
+                apiUrl={API_URL}
                 onUpdated={fetchData}
+                canManage={canManageCategories}
               />
             </div>
+          )}
+
+          {activeModule === 'cadastros' && activeSubMenu === 'membros' && familyAccess?.role === 'OWNER' && (
+            <FamilyMembersManager />
           )}
 
           {/* NOVO LAYOUT MODERNIZADO: CONTAS A PAGAR */}
@@ -2111,19 +2194,19 @@ export default function DashboardPage() {
                   >
                     <FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline">Exportar XLSX</span>
                   </button>
-                  <button
+                  {canCreateTransactions && <button
                     type="button"
                     onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }}
                     className="hidden md:flex bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-sm items-center gap-2"
                   >
                     <PlusCircle className="w-4 h-4" /> Adicionar
-                  </button>
+                  </button>}
                 </div>
               </div>
 
               {renderFilterBar()}
 
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {canSettleTransactions && <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <label className="flex items-center gap-3 text-sm text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2148,7 +2231,7 @@ export default function DashboardPage() {
                     {payingExpenses ? 'Processando...' : 'Baixar selecionados'}
                   </button>
                 </div>
-              </div>
+              </div>}
 
               <div className="space-y-3">
                 {filteredTransactions('EXPENSE').length > 0 ? (
@@ -2172,9 +2255,9 @@ export default function DashboardPage() {
                   <h2 className="text-xl sm:text-2xl font-extrabold text-white">Contas a Receber</h2>
                   <p className="text-slate-400 text-sm mt-1">Monitorize as suas entradas e receitas previstas.</p>
                 </div>
-                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="hidden md:flex bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-sm items-center gap-2">
+                {canCreateTransactions && <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="hidden md:flex bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-sm items-center gap-2">
                   <PlusCircle className="w-4 h-4" /> Adicionar
-                </button>
+                </button>}
               </div>
 
               {renderFilterBar()}
@@ -2200,9 +2283,9 @@ export default function DashboardPage() {
                   <h2 className="text-2xl font-extrabold text-white">Metas & Objetivos de Investimento</h2>
                   <p className="text-slate-400 text-sm">Defina objetivos e distribua o valor automaticamente nas contas a pagar na categoria "Investimento".</p>
                 </div>
-                <button onClick={() => setIsGoalModalOpen(true)} className="self-start bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 px-5 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg">
+                {canManageGoals && <button onClick={() => setIsGoalModalOpen(true)} className="self-start bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 px-5 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg">
                   <PlusCircle className="w-5 h-5" /> Novo Objetivo
-                </button>
+                </button>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {investmentGoals.length > 0 ? (
@@ -2235,14 +2318,14 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex justify-between items-center text-xs text-slate-400">
                         <span>{goal.paidInstallmentCount} de {goal.totalInstallments} parcelas baixadas</span>
-                        <button
+                        {canDeleteTransactions && <button
                           onClick={() => openDeleteModal(goal.firstInstallment, 'all')}
                           title="Excluir objetivo"
                           aria-label={`Excluir objetivo ${goal.title}`}
                           className="p-2 text-slate-400 hover:text-rose-400 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   ))
@@ -2253,7 +2336,7 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      <button
+      {canCreateTransactions && <button
         type="button"
         onClick={() => {
           if (activeModule === 'receber') setTxType('INCOME');
@@ -2265,10 +2348,10 @@ export default function DashboardPage() {
         className="fixed right-5 bottom-5 mb-[env(safe-area-inset-bottom)] z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-slate-950 shadow-[0_8px_30px_rgba(16,185,129,0.4)] transition-transform active:scale-95"
       >
         <Plus className="h-7 w-7" strokeWidth={2.5} />
-      </button>
+      </button>}
 
       {/* ================= MODAL DE EXCLUSÃO INTELIGENTE ================= */}
-      {isDeleteModalOpen && txToDelete && (
+      {isDeleteModalOpen && txToDelete && canDeleteTransactions && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-rose-500/30 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
             <button onClick={() => setIsDeleteModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
@@ -2290,7 +2373,7 @@ export default function DashboardPage() {
       )}
 
       {/* ================= MODAL DE EDIÇÃO ================= */}
-      {isEditModalOpen && editingTx && (
+      {isEditModalOpen && editingTx && canEditTransactions && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
             <button onClick={() => setIsEditModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
@@ -2322,7 +2405,7 @@ export default function DashboardPage() {
       )}
 
       {/* ================= MODAL DE NOVO OBJETIVO / META ================= */}
-      {isGoalModalOpen && (
+      {isGoalModalOpen && canManageGoals && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
             <button onClick={() => setIsGoalModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
@@ -2343,7 +2426,7 @@ export default function DashboardPage() {
       )}
 
       {/* ================= MODAL DE NOVO LANÇAMENTO ================= */}
-      {isTxModalOpen && (
+      {isTxModalOpen && canCreateTransactions && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-5 sm:p-8 shadow-2xl relative my-auto">
             <button onClick={() => setIsTxModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
@@ -2395,7 +2478,7 @@ export default function DashboardPage() {
       )}
 
       {/* ================= MODAL DE CARTÃO ================= */}
-      {isCardModalOpen && (
+      {isCardModalOpen && canManageCards && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
             <button onClick={() => setIsCardModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>

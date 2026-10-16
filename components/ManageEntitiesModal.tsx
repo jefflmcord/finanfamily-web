@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Wallet, Tag, CreditCard } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/apiClient';
 
 interface ManageEntitiesModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export default function ManageEntitiesModal({ isOpen, onClose, onSuccess }: Mana
     try {
       const formattedBalance = Number(String(initialBalance).replace(',', '.')) || 0;
 
-      const res = await fetch(`${apiUrl}/api/accounts`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/accounts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -78,7 +79,7 @@ export default function ManageEntitiesModal({ isOpen, onClose, onSuccess }: Mana
     try {
       const formattedBudget = Number(String(monthlyBudget).replace(',', '.')) || 0;
 
-      const res = await fetch(`${apiUrl}/api/categories`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -114,7 +115,7 @@ export default function ManageEntitiesModal({ isOpen, onClose, onSuccess }: Mana
       // Trata vírgula para número válido (ex: "3600,00" -> 3600.00)
       const formattedLimit = Number(String(cardLimit).replace(',', '.')) || 0;
 
-      const res = await fetch(`${apiUrl}/api/credit-cards`, {
+      const res = await authenticatedFetch(`${apiUrl}/api/credit-cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
