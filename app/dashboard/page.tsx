@@ -2873,7 +2873,7 @@ export default function DashboardPage() {
             <form onSubmit={handleSaveTransaction} className="space-y-4">
               <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
                 <button type="button" onClick={() => { setTxType('EXPENSE'); setTxCategoryId(''); }} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'EXPENSE' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}>Contas a Pagar</button>
-                <button type="button" onClick={() => { setTxType('INCOME'); setTxCategoryId(''); setTxRepeatMonthly(false); }} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber</button>
+                <button type="button" onClick={() => { setTxType('INCOME'); setTxCategoryId(''); }} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber</button>
               </div>
               <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Descrição</label><input type="text" required placeholder="Ex: Aluguel, Supermercado..." value={txDescription} onChange={e => setTxDescription(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
               <div>
@@ -2890,8 +2890,7 @@ export default function DashboardPage() {
                     .map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
                 </select>
               </div>
-              {txType === 'EXPENSE' && (
-                <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
+              <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-100 cursor-pointer">
                       <input
                         type="checkbox"
@@ -2906,7 +2905,7 @@ export default function DashboardPage() {
                         }}
                         className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
                       />
-                      Repetir esta conta mensalmente
+                      {txType === 'EXPENSE' ? 'Repetir esta conta mensalmente' : 'Repetir esta entrada mensalmente'}
                     </label>
                     {txRepeatMonthly && (
                       <div>
@@ -2921,12 +2920,11 @@ export default function DashboardPage() {
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"
                         />
                         <p className="mt-2 text-xs text-slate-400">
-                          Serão criadas {txRecurrenceMonths || 0} contas a pagar mensais, cada uma no valor de {formatCurrency(Number(txAmount) || 0)}.
+                          Serão criados {txRecurrenceMonths || 0} lançamentos mensais de {txType === 'EXPENSE' ? 'despesa' : 'receita'}, cada um no valor de {formatCurrency(Number(txAmount) || 0)}.
                         </p>
                       </div>
                     )}
                 </section>
-              )}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">{txRepeatMonthly ? 'Valor de cada mês (R$)' : Number(txTotalInstallments) > 1 && txAmountMode === 'INSTALLMENT' ? 'Valor de Cada Parcela (R$)' : 'Valor Total (R$)'}</label><input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div>
