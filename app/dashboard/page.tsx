@@ -82,6 +82,7 @@ export default function DashboardPage() {
   const [txRecurrenceMonths, setTxRecurrenceMonths] = useState('2');
   const [hoveredCreditCardCategory, setHoveredCreditCardCategory] = useState<string | null>(null);
   const [selectedCreditCardCategory, setSelectedCreditCardCategory] = useState<string | null>(null);
+  const [hoveredProjectionPointIndex, setHoveredProjectionPointIndex] = useState<number | null>(null);
 
   // Modal Cartão & Objetivos
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -2027,7 +2028,7 @@ export default function DashboardPage() {
                 <div className="mt-4 overflow-x-auto">
                   <svg
                     viewBox={`0 0 ${projectionChartWidth} ${projectionChartHeight}`}
-                    role="img"
+                    role="group"
                     aria-label={`Projeção mensal do saldo: saldo atual ${formatCurrency(totalBalance)}, saldo ao final de 12 meses ${formatCurrency(runningProjectedBalance)}.`}
                     className="min-w-[640px] w-full"
                     preserveAspectRatio="none"
@@ -2068,15 +2069,30 @@ export default function DashboardPage() {
                         <circle
                           cx={point.x}
                           cy={point.y}
-                          r={index === projectionChartPoints.length - 1 ? 5 : 3}
-                          fill={runningProjectedBalance >= totalBalance ? '#34d399' : '#fb7185'}
-                          stroke="#0f172a"
-                          strokeWidth="2"
+                          r="12"
+                          fill="transparent"
+                          className="cursor-pointer focus-visible:stroke-indigo-300 focus-visible:stroke-2"
+                          tabIndex={0}
+                          role="img"
+                          aria-label={`${index === 0 ? 'Hoje' : projectionMonths[index - 1].label}: saldo projetado ${formatCurrency(point.balance)}`}
+                          onMouseEnter={() => setHoveredProjectionPointIndex(index)}
+                          onMouseLeave={() => setHoveredProjectionPointIndex(null)}
+                          onFocus={() => setHoveredProjectionPointIndex(index)}
+                          onBlur={() => setHoveredProjectionPointIndex(null)}
                         >
                           <title>
                             {index === 0 ? 'Hoje' : projectionMonths[index - 1].label}: {formatCurrency(point.balance)}
                           </title>
                         </circle>
+                        <circle
+                          cx={point.x}
+                          cy={point.y}
+                          r={index === projectionChartPoints.length - 1 ? 5 : 3}
+                          fill={runningProjectedBalance >= totalBalance ? '#34d399' : '#fb7185'}
+                          stroke="#0f172a"
+                          strokeWidth="2"
+                          pointerEvents="none"
+                        />
                         {index > 0 && (
                           <text
                             x={point.x}
@@ -2091,6 +2107,53 @@ export default function DashboardPage() {
                         )}
                       </g>
                     ))}
+                    {hoveredProjectionPointIndex !== null && (() => {
+                      const point = projectionChartPoints[hoveredProjectionPointIndex];
+                      const tooltipWidth = 190;
+                      const tooltipHeight = 48;
+                      const tooltipX = Math.max(
+                        projectionChartLeft,
+                        Math.min(point.x - tooltipWidth / 2, projectionChartRight - tooltipWidth)
+                      );
+                      const tooltipY = point.y - tooltipHeight - 12 >= projectionChartTop
+                        ? point.y - tooltipHeight - 12
+                        : point.y + 12;
+                      const tooltipLabel = hoveredProjectionPointIndex === 0
+                        ? 'Hoje'
+                        : projectionMonths[hoveredProjectionPointIndex - 1].label;
+
+                      return (
+                        <g pointerEvents="none">
+                          <rect
+                            x={tooltipX}
+                            y={tooltipY}
+                            width={tooltipWidth}
+                            height={tooltipHeight}
+                            rx="10"
+                            fill="#0f172a"
+                            stroke="#475569"
+                          />
+                          <text
+                            x={tooltipX + 12}
+                            y={tooltipY + 18}
+                            fill="#94a3b8"
+                            fontSize="11"
+                            className="capitalize"
+                          >
+                            {tooltipLabel}
+                          </text>
+                          <text
+                            x={tooltipX + 12}
+                            y={tooltipY + 37}
+                            fill={point.balance >= 0 ? '#34d399' : '#fb7185'}
+                            fontSize="13"
+                            fontWeight="700"
+                          >
+                            Saldo projetado: {formatCurrency(point.balance)}
+                          </text>
+                        </g>
+                      );
+                    })()}
                     <text x={projectionChartLeft} y="273" fill="#64748b" fontSize="10">Hoje</text>
                     <text x={projectionChartRight} y="273" textAnchor="end" fill="#64748b" fontSize="10">12 meses</text>
                   </svg>
