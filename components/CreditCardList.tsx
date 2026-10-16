@@ -8,6 +8,7 @@ import {
   X, 
   Receipt,
   Calendar,
+  CalendarDays,
   AlertCircle,
   Pencil,
   Trash2
@@ -75,6 +76,7 @@ export default function CreditCardList({
 
   // Modal de Fatura
   const [selectedCard, setSelectedCard] = useState<CardItem | null>(null);
+  const [upcomingCard, setUpcomingCard] = useState<CardItem | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoicePaidAmount, setInvoicePaidAmount] = useState('0');
@@ -150,6 +152,32 @@ export default function CreditCardList({
     getCurrentInvoiceItems(card)
       .filter((transaction) => transaction.status !== 'PAID')
       .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+
+  const getUpcomingInvoices = (card: CardItem) => {
+    const currentPeriod = getCurrentCardBillingPeriod(card.closing_day, card.due_day);
+    const [year, month] = currentPeriod.dueDate.slice(0, 7).split('-').map(Number);
+    const nextInvoiceMonths = Array.from({ length: 6 }, (_, index) => {
+      const invoiceDate = new Date(year, month - 1 + index + 1, 1);
+      const monthKey = `${invoiceDate.getFullYear()}-${String(invoiceDate.getMonth() + 1).padStart(2, '0')}`;
+      const items = transactions
+        .filter((transaction) =>
+          String(transaction.credit_card_id) === String(card.id) &&
+          transaction.type === 'EXPENSE' &&
+          transaction.status !== 'PAID' &&
+          transaction.due_date?.slice(0, 7) === monthKey
+        )
+        .sort((first, second) => first.due_date.localeCompare(second.due_date));
+
+      return {
+        monthKey,
+        label: invoiceDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+        items,
+        total: items.reduce((total, item) => total + Number(item.amount || 0), 0),
+      };
+    });
+
+    return nextInvoiceMonths.filter((invoice) => invoice.items.length > 0);
+  };
 
   const getAvailableLimit = (card: CardItem) => {
     const committedAmount = transactions
@@ -404,8 +432,86 @@ export default function CreditCardList({
                 <Receipt className="w-3.5 h-3.5" />
                 {canSettleTransactions ? 'Pagar fatura' : 'Ver fatura'}
               </button>
+              <button
+                type="button"
+                onClick={() => setUpcomingCard(card)}
+                className="w-full flex items-center justify-center gap-1.5 bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/80 text-xs font-semibold py-2 rounded-xl transition-colors cursor-pointer"
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                Próximas faturas
+              </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {upcomingCard && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 relative shadow-2xl flex flex-col max-h-[90vh]">
+            <button
+              type="button"
+              onClick={() => setUpcomingCard(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+              aria-label="Fechar próximas faturas"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2.5 mb-1">
+              <CalendarDays className="w-5 h-5 text-sky-400" />
+              <h3 className="text-base font-bold text-white">
+                Próximas faturas: {upcomingCard.name}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              Lançamentos pendentes nos próximos seis meses.
+            </p>
+
+            {(() => {
+              const upcomingInvoices = getUpcomingInvoices(upcomingCard);
+              if (upcomingInvoices.length === 0) {
+                return (
+                  <div className="py-8 text-center text-xs text-slate-500 space-y-2">
+                    <CheckCircle2 className="w-8 h-8 text-slate-600 mx-auto" />
+                    <p>Não há lançamentos pendentes nas próximas faturas deste cartão.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                  {upcomingInvoices.map((invoice) => (
+                    <section key={invoice.monthKey} className="border border-slate-800 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between gap-3 bg-slate-950/70 px-3 py-2.5">
+                        <h4 className="text-xs font-bold capitalize text-slate-200">{invoice.label}</h4>
+                        <strong className="text-xs text-sky-400">{formatCurrency(invoice.total)}</strong>
+                      </div>
+                      <div className="divide-y divide-slate-800/60">
+                        {invoice.items.map((item) => (
+                          <div key={item.id} className="p-3 flex justify-between items-center gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-medium text-slate-200">{item.description}</p>
+                              <span className="text-[11px] text-slate-500">
+                                Vence {formatDate(item.due_date)} • {item.category_name || 'Geral'}
+                              </span>
+                              {item.total_installments && item.total_installments > 1 && (
+                                <span className="block text-[10px] text-indigo-400 mt-1">
+                                  Parcela {item.installment_number}/{item.total_installments}
+                                </span>
+                              )}
+                            </div>
+                            <strong className="shrink-0 text-xs text-slate-200">
+                              {formatCurrency(Number(item.amount || 0))}
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
