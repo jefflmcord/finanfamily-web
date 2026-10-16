@@ -26,8 +26,8 @@ export default function DashboardPage() {
   const [familyId, setFamilyId] = useState<string>('1');
 
   // Filtros de Listagem
-  const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
-  const [filterYear, setFilterYear] = useState<number>(new Date().getFullYear());
+  const [filterMonth, setFilterMonth] = useState<number | 'ALL'>(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear] = useState<number | 'ALL'>(new Date().getFullYear());
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'PENDING' | 'PAID' | 'OVERDUE'>('ALL');
 
   // Modal Novo Lançamento
@@ -411,10 +411,11 @@ export default function DashboardPage() {
     return transactions.filter(t => {
       if (t.type !== type) return false;
 
-      // Filtro de Mês/Ano
+      // Filtro de Mês/Ano (Agora suporta 'ALL')
       if (t.due_date) {
         const [year, month] = t.due_date.split('-');
-        if (Number(year) !== filterYear || Number(month) !== filterMonth) return false;
+        if (filterYear !== 'ALL' && Number(year) !== filterYear) return false;
+        if (filterMonth !== 'ALL' && Number(month) !== filterMonth) return false;
       }
 
       // Filtro de Status
