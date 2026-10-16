@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
 import { Wallet, Loader2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
@@ -11,6 +12,58 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://finanfamily-api.onrender.com';
+
+  const handleGoogleCredential = useCallback(async (credential: string) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch(`${apiUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Erro ao autenticar com o Google.');
+
+      localStorage.setItem('@FinanFamily:token', data.token);
+      localStorage.setItem('@FinanFamily:user', JSON.stringify(data.user));
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha na autenticação com o Google.');
+    } finally {
+      setLoading(false);
+    }
+  }, [apiUrl, router]);
+
+  const initializeGoogleButton = useCallback(() => {
+    const google = (window as any).google;
+    const container = document.getElementById('google-signin-btn');
+    if (!google?.accounts?.id || !googleClientId || !container) return;
+
+    google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: (response: { credential?: string }) => {
+        if (response.credential) handleGoogleCredential(response.credential);
+      },
+    });
+    container.replaceChildren();
+    google.accounts.id.renderButton(container, {
+      theme: 'outline',
+      size: 'large',
+      width: Math.min(container.clientWidth || 320, 400),
+      text: 'signin_with',
+      shape: 'rectangular',
+      locale: 'pt-BR',
+    });
+  }, [googleClientId, handleGoogleCredential]);
+
+  useEffect(() => {
+    initializeGoogleButton();
+  }, [initializeGoogleButton]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +97,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col justify-center items-center p-6 font-sans">
+      {googleClientId && (
+        <Script
+          src="https://accounts.google.com/gsi/client"
+          strategy="afterInteractive"
+          onLoad={initializeGoogleButton}
+        />
+      )}
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
         
         <div className="text-center space-y-2">
@@ -59,6 +119,17 @@ export default function LoginPage() {
         {error && (
           <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3.5 rounded-xl text-xs font-medium text-center">
             {error}
+          </div>
+        )}
+
+        {googleClientId && (
+          <div className="space-y-4">
+            <div id="google-signin-btn" className="flex justify-center w-full min-h-10" />
+            <div className="flex items-center gap-3 text-[10px] uppercase text-slate-500">
+              <span className="h-px flex-1 bg-slate-800" />
+              <span>ou entre com seu e-mail</span>
+              <span className="h-px flex-1 bg-slate-800" />
+            </div>
           </div>
         )}
 

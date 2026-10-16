@@ -8,9 +8,9 @@ import {
   X, 
   Receipt,
   Calendar,
-  AlertCircle,
-  TrendingDown
+  AlertCircle
 } from 'lucide-react';
+import { getCurrentCardBillingPeriod, type CardBillingPeriod } from '@/lib/creditCardBilling';
 
 interface CardItem {
   id: string;
@@ -27,7 +27,13 @@ interface InvoiceItem {
   amount: number;
   status: string;
   transaction_date: string;
+  due_date: string;
+  type: string;
+  credit_card_id: string;
+  account_id?: string | null;
   category_name?: string;
+  installment_number?: number;
+  total_installments?: number;
 }
 
 interface Account {
@@ -36,20 +42,19 @@ interface Account {
 }
 
 interface CreditCardListProps {
+  familyId?: string;
   refreshTrigger?: number;
-  month?: number;
-  year?: number;
   onInvoicePaid?: () => void;
 }
 
 export default function CreditCardList({ 
+  familyId: familyIdProp,
   refreshTrigger, 
-  month = 10, 
-  year = 2026,
   onInvoicePaid 
 }: CreditCardListProps) {
   const [cards, setCards] = useState<CardItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transactions, setTransactions] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal de Fatura
@@ -57,27 +62,29 @@ export default function CreditCardList({
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
-  const [loadingInvoice, setLoadingInvoice] = useState(false);
+  const [invoicePeriod, setInvoicePeriod] = useState<CardBillingPeriod | null>(null);
 
   // Formulário de Pagamento da Fatura
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [paidAmount, setPaidAmount] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
   const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
 
-  const familyId = process.env.NEXT_PUBLIC_FAMILY_ID || '0663962f-71e2-43e1-a8a5-0c017f68536d';
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+  const familyId = familyIdProp || process.env.NEXT_PUBLIC_FAMILY_ID || '1';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://finanfamily-api.onrender.com';
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cardsRes, accsRes] = await Promise.all([
+      const [cardsRes, accsRes, transactionsRes] = await Promise.all([
         fetch(`${apiUrl}/api/credit-cards?family_id=${familyId}`).then((r) => r.json()),
-        fetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json())
+        fetch(`${apiUrl}/api/accounts?family_id=${familyId}`).then((r) => r.json()),
+        fetch(`${apiUrl}/api/transactions?family_id=${familyId}`).then((r) => r.json())
       ]);
 
       if (Array.isArray(cardsRes)) setCards(cardsRes);
+      if (Array.isArray(transactionsRes)) setTransactions(transactionsRes);
       if (Array.isArray(accsRes)) {
         setAccounts(accsRes);
         if (accsRes.length > 0) setSelectedAccountId(accsRes[0].id);
@@ -103,78 +110,84 @@ export default function CreditCardList({
     return `${d}/${m}/${y}`;
   };
 
-  async function handleOpenInvoice(card: CardItem) {
+  function handleOpenInvoice(card: CardItem) {
+    const period = getCurrentCardBillingPeriod(card.closing_day, card.due_day);
+    const invoiceMonth = period.dueDate.slice(0, 7);
+    const items = transactions
+      .filter((transaction) =>
+        String(transaction.credit_card_id) === String(card.id) &&
+        transaction.type === 'EXPENSE' &&
+        transaction.due_date?.slice(0, 7) === invoiceMonth
+      )
+      .sort((first, second) => first.due_date.localeCompare(second.due_date));
+
     setSelectedCard(card);
-    setLoadingInvoice(true);
+    setInvoicePeriod(period);
     setShowPaymentForm(false);
-    try {
-      const res = await fetch(`${apiUrl}/api/credit-cards/${card.id}/invoice?month=${month}&year=${year}`);
-      const data = await res.json();
-      setInvoiceItems(data.items || []);
-      setInvoiceTotal(Number(data.total || 0));
-      setInvoiceIsPaid(Boolean(data.isPaid));
-      setPaidAmount(String(data.total || 0));
-      setPaymentDate(new Date().toISOString().split('T')[0]);
-    } catch (err) {
-      console.error('Erro ao consultar fatura:', err);
-    } finally {
-      setLoadingInvoice(false);
-    }
+    setInvoiceItems(items);
+    setInvoiceTotal(items.reduce((total, item) => total + Number(item.amount || 0), 0));
+    setInvoiceIsPaid(items.length > 0 && items.every((item) => item.status === 'PAID'));
+    setSelectedAccountId(items.find((item) => item.account_id)?.account_id || accounts[0]?.id || '');
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentError('');
   }
 
   async function handlePayInvoice(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedCard) return;
 
+    const pendingItems = invoiceItems.filter((item) => item.status !== 'PAID');
+    if (pendingItems.length === 0) return;
+    if (!selectedAccountId && pendingItems.some((item) => !item.account_id)) {
+      setPaymentError('Selecione uma conta para registrar o pagamento da fatura.');
+      return;
+    }
+
     setSubmittingPayment(true);
+    setPaymentError('');
+    const paidIds: string[] = [];
     try {
-      const finalPaid = Number(String(paidAmount).replace(',', '.')) || invoiceTotal;
+      for (const item of pendingItems) {
+        const res = await fetch(`${apiUrl}/api/transactions/${item.id}/pay`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            account_id: selectedAccountId || item.account_id || null,
+            paid_amount: Number(item.amount),
+            payment_date: paymentDate
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Falha ao baixar um lançamento da fatura.');
 
-      const res = await fetch(`${apiUrl}/api/credit-cards/${selectedCard.id}/pay-invoice`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          month,
-          year,
-          account_id: selectedAccountId || null,
-          paid_amount: finalPaid,
-          payment_date: paymentDate
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Falha ao liquidar fatura.');
+        paidIds.push(item.id);
+        setInvoiceItems((currentItems) => currentItems.map((currentItem) =>
+          currentItem.id === item.id ? { ...currentItem, status: 'PAID' } : currentItem
+        ));
       }
 
+      setInvoiceIsPaid(true);
       setSelectedCard(null);
       await loadData();
-      if (onInvoicePaid) onInvoicePaid();
+      if (onInvoicePaid) await onInvoicePaid();
     } catch (err: any) {
-      alert(err.message);
+      setPaymentError(paidIds.length > 0
+        ? `${paidIds.length} lançamento(s) baixado(s). O restante não foi atualizado: ${err.message}`
+        : err.message || 'Falha ao liquidar fatura.');
+      if (paidIds.length > 0) {
+        await loadData();
+        if (onInvoicePaid) await onInvoicePaid();
+      }
     } finally {
       setSubmittingPayment(false);
     }
   }
 
-  const interestDiff = Math.max(
-    0,
-    (Number(String(paidAmount).replace(',', '.')) || 0) - invoiceTotal
-  );
+  const pendingItems = invoiceItems.filter((item) => item.status !== 'PAID');
+  const pendingTotal = pendingItems.reduce((total, item) => total + Number(item.amount || 0), 0);
 
   return (
-    <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-indigo-400" />
-            Cartões de Crédito ({cards.length})
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Acompanhamento de limites e liquidação de faturas de {String(month).padStart(2, '0')}/{year}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4">
 
       {loading ? (
         <p className="text-xs text-slate-500 py-4 text-center">A carregar cartões...</p>
@@ -215,7 +228,7 @@ export default function CreditCardList({
                 className="w-full flex items-center justify-center gap-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold py-2 rounded-xl transition-colors cursor-pointer"
               >
                 <Receipt className="w-3.5 h-3.5" />
-                Ver Fatura / Pagar
+                Pagar fatura
               </button>
             </div>
           ))}
@@ -240,15 +253,18 @@ export default function CreditCardList({
               </h3>
             </div>
             <p className="text-xs text-slate-400 mb-4">
-              Competência: <strong className="text-slate-200">{String(month).padStart(2, '0')}/{year}</strong> | Vencimento: dia {selectedCard.due_day}
+              {invoicePeriod && (
+                <>
+                  Fechamento: <strong className="text-slate-200">{formatDate(invoicePeriod.periodStart)} a {formatDate(invoicePeriod.closingDate)}</strong>
+                  {' | '}Vencimento: <strong className="text-slate-200">{formatDate(invoicePeriod.dueDate)}</strong>
+                </>
+              )}
             </p>
 
-            {loadingInvoice ? (
-              <p className="text-xs text-slate-500 py-8 text-center">A carregar itens da fatura...</p>
-            ) : invoiceItems.length === 0 ? (
+            {invoiceItems.length === 0 ? (
               <div className="py-8 text-center text-xs text-slate-500 space-y-2">
                 <CheckCircle2 className="w-8 h-8 text-slate-600 mx-auto" />
-                <p>Nenhuma compra registada neste cartão para o mês selecionado.</p>
+                <p>Nenhum lançamento faz parte do fechamento atual deste cartão.</p>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto space-y-4 pr-1">
@@ -259,8 +275,13 @@ export default function CreditCardList({
                       <div>
                         <p className="font-medium text-slate-200">{item.description}</p>
                         <span className="text-[11px] text-slate-500">
-                          {formatDate(item.transaction_date)} • {item.category_name || 'Geral'}
+                          {formatDate(item.transaction_date)} • Vence {formatDate(item.due_date)} • {item.category_name || 'Geral'}
                         </span>
+                        {item.total_installments && item.total_installments > 1 && (
+                          <span className="block text-[10px] text-indigo-400 mt-1">
+                            Parcela {item.installment_number}/{item.total_installments}
+                          </span>
+                        )}
                       </div>
                       <div className="text-right">
                         <span className="font-bold text-slate-200">{formatCurrency(item.amount)}</span>
@@ -281,6 +302,12 @@ export default function CreditCardList({
                   <span className="text-xs font-semibold text-slate-400">Total da Fatura</span>
                   <span className="text-base font-black text-rose-400">{formatCurrency(invoiceTotal)}</span>
                 </div>
+                {pendingItems.length > 0 && (
+                  <div className="flex justify-between items-center text-xs text-slate-400 px-1">
+                    <span>Em aberto ({pendingItems.length} lançamento(s))</span>
+                    <strong className="text-amber-400">{formatCurrency(pendingTotal)}</strong>
+                  </div>
+                )}
 
                 {/* Se a fatura já estiver toda quitada */}
                 {invoiceIsPaid ? (
@@ -295,36 +322,10 @@ export default function CreditCardList({
                         onClick={() => setShowPaymentForm(true)}
                         className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
                       >
-                        Pagar Fatura Completa
+                        Baixar todos os lançamentos pendentes
                       </button>
                     ) : (
-                      /* Formulário de Quitação Consolidada */
                       <form onSubmit={handlePayInvoice} className="space-y-3 pt-2 border-t border-slate-800">
-                        <div>
-                          <label className="block text-xs font-medium text-emerald-400 mb-1">
-                            Valor Efetivamente Pago (R$)
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={paidAmount}
-                            onChange={(e) => setPaidAmount(e.target.value)}
-                            className="w-full bg-slate-950 border border-emerald-500/50 rounded-xl px-3 py-2 text-sm text-emerald-300 font-bold focus:outline-none"
-                          />
-                        </div>
-
-                        {interestDiff > 0 && (
-                          <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-between text-xs">
-                            <span className="text-amber-300 flex items-center gap-1.5">
-                              <TrendingDown className="w-3.5 h-3.5 text-amber-400" />
-                              Encargos / Juros:
-                            </span>
-                            <strong className="text-amber-400 font-bold">
-                              + {formatCurrency(interestDiff)}
-                            </strong>
-                          </div>
-                        )}
-
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Data de Pagamento</label>
@@ -337,13 +338,13 @@ export default function CreditCardList({
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Debitar da Conta</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Pagar pela conta</label>
                             <select
                               value={selectedAccountId}
                               onChange={(e) => setSelectedAccountId(e.target.value)}
                               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none cursor-pointer"
                             >
-                              <option value="">Nenhuma / Dinheiro</option>
+                              <option value="">Selecione uma conta</option>
                               {accounts.map((a) => (
                                 <option key={a.id} value={a.id}>{a.name}</option>
                               ))}
@@ -361,12 +362,18 @@ export default function CreditCardList({
                           </button>
                           <button
                             type="submit"
-                            disabled={submittingPayment}
+                            disabled={submittingPayment || pendingItems.length === 0 || (!selectedAccountId && pendingItems.some((item) => !item.account_id))}
                             className="px-4 py-2 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 rounded-xl transition-all cursor-pointer shadow-md"
                           >
-                            {submittingPayment ? 'A liquidar...' : 'Confirmar Pagamento'}
+                            {submittingPayment ? 'Baixando...' : 'Confirmar baixa'}
                           </button>
                         </div>
+                        {paymentError && (
+                          <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-400 flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span>{paymentError}</span>
+                          </div>
+                        )}
                       </form>
                     )}
                   </>

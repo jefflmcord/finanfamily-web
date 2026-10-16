@@ -7,7 +7,6 @@ import {
   ArrowRight,
   TrendingUp,
   ShieldCheck,
-  Smartphone,
   Laptop,
   CreditCard,
   PieChart,
@@ -62,16 +61,16 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* ================= HERO SECTION + MOCKUPS (NOTEBOOK & CELULAR) ================= */}
+      {/* ================= HERO SECTION + MOCKUP DO NOTEBOOK ================= */}
       <section id="plataforma" className="relative pt-32 pb-20 md:pt-40 md:pb-28 px-6">
         <div className="max-w-7xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sky-100/80 border border-sky-200 text-sky-700 text-xs font-bold mb-6 shadow-sm">
             <Sparkles className="w-4 h-4 text-sky-500" />
-            <span>Sistema Web + App Android Sincronizados em Tempo Real</span>
+            <span>Controle financeiro da família em um só lugar</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 max-w-4xl mx-auto leading-[1.15] mb-6">
-            A inteligência financeira da sua família, <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-sky-500">no computador e no bolso.</span>
+            A inteligência financeira da sua família, <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-sky-500">com clareza e praticidade.</span>
           </h1>
 
           <p className="text-slate-600 text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
@@ -94,7 +93,7 @@ export default function LandingPage() {
             </a>
           </div>
 
-          {/* ================= COMPOSIÇÃO VISUAL: NOTEBOOK + SMARTPHONE (Mantidos Escuros para Contraste) ================= */}
+          {/* ================= COMPOSIÇÃO VISUAL: NOTEBOOK ================= */}
           <div className="relative max-w-5xl mx-auto mt-8">
             
             {/* 1. MOLDURA DO NOTEBOOK (INTERFACE WEB) */}
@@ -240,52 +239,6 @@ export default function LandingPage() {
             <div className="h-5 bg-slate-300 rounded-b-2xl mx-auto w-[98%] border-b-2 border-slate-400 shadow-2xl relative z-0" />
             <div className="h-1 bg-slate-400 rounded-b-xl mx-auto w-[20%] mx-auto shadow-md" />
 
-            {/* 2. MOCKUP DO CELULAR ANDROID SOBREPOSTO */}
-            <div className="mt-8 lg:mt-0 lg:absolute lg:-bottom-12 lg:-right-8 w-72 mx-auto bg-slate-950 border-[6px] border-slate-800 rounded-[2.5rem] p-4 shadow-[0_30px_60px_rgba(0,0,0,0.5)] text-left z-20">
-              <div className="w-16 h-1.5 bg-slate-800 rounded-full mx-auto mb-3" />
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                    <Wallet className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-white leading-tight">App Android</p>
-                    <p className="text-[9px] text-emerald-400">Sincronizado</p>
-                  </div>
-                </div>
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                  Ao vivo
-                </span>
-              </div>
-
-              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 p-3.5 rounded-2xl mb-3 shadow-lg">
-                <p className="text-[10px] font-bold uppercase opacity-80">Saldo da Família</p>
-                <p className="text-xl font-black">R$ 14.850,00</p>
-                <p className="text-[10px] font-semibold mt-1 opacity-90">Meta Viagem: 85% concluída</p>
-              </div>
-
-              <div className="space-y-2 mb-3">
-                <p className="text-[10px] font-semibold uppercase text-slate-400">Últimos lançamentos</p>
-                <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
-                  <div className="text-[11px]">
-                    <p className="text-white font-semibold">Supermercado</p>
-                    <p className="text-[9px] text-slate-400">Por Jéssica • Agora</p>
-                  </div>
-                  <span className="text-xs font-bold text-rose-400">- R$ 342,90</span>
-                </div>
-                <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
-                  <div className="text-[11px]">
-                    <p className="text-white font-semibold">Salário Mensal</p>
-                    <p className="text-[9px] text-slate-400">Conta Principal • Hoje</p>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-400">+ R$ 6.800,00</span>
-                </div>
-              </div>
-
-              <div className="bg-emerald-500 text-slate-950 font-bold text-xs py-2.5 rounded-xl text-center shadow-sm">
-                + Lançamento Rápido
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -298,7 +251,7 @@ export default function LandingPage() {
             <div className="relative rounded-3xl overflow-hidden border border-slate-200 shadow-xl">
               <img
                 src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1000&q=80"
-                alt="Casal sorrindo usando o notebook e celular para planejar as finanças"
+                alt="Casal sorrindo enquanto planeja as finanças"
                 className="w-full h-[420px] object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent" />
@@ -339,7 +292,7 @@ export default function LandingPage() {
             </h2>
 
             <p className="text-slate-600 text-base leading-relaxed font-medium">
-              O maior vilão do orçamento familiar é a falta de visibilidade. Com o <strong className="text-slate-900">FinanFamily</strong>, quando um regista uma compra pelo telemóvel no mercado, o outro vê o saldo atualizado no notebook instantaneamente.
+              O maior vilão do orçamento familiar é a falta de visibilidade. Com o <strong className="text-slate-900">FinanFamily</strong>, quando alguém regista uma compra, toda a família acompanha o saldo atualizado em um só lugar.
             </p>
 
             <div className="space-y-4 pt-2">
@@ -475,13 +428,13 @@ export default function LandingPage() {
 
             <h3 className="text-2xl font-extrabold text-slate-900 mb-2">Plano Família Completo</h3>
             <p className="text-slate-500 text-sm mb-6">
-              Tudo o que você precisa para assumir o controle no computador e no telemóvel.
+              Tudo o que você precisa para assumir o controle das finanças da família em um só lugar.
             </p>
 
             <div className="space-y-3 mb-8 text-sm text-slate-700 font-medium">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                <span>Painel Web Completo + App Android Sincronizado</span>
+                <span>Painel Web completo e compartilhado pela família</span>
               </div>
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
