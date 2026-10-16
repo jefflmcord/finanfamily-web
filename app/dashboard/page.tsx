@@ -613,6 +613,7 @@ export default function DashboardPage() {
     .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
   const yearIncomePending = Math.max(0, yearIncomeTotal - yearIncomePaid);
 
+  const CATEGORY_COLORS = ['#10b981', '#38bdf8', '#f59e0b', '#a855f7', '#f43f5e', '#6366f1'];
   const yearExpenseTotal = yearTransactions
     .filter(t => t.type === 'EXPENSE')
     .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
@@ -632,6 +633,22 @@ export default function DashboardPage() {
     .sort((first, second) => second.amount - first.amount);
   const creditCardExpenseTotal = creditCardCategoryTotals
     .reduce((total, category) => total + category.amount, 0);
+  let creditCardPieEnd = 0;
+  const creditCardPieSlices = creditCardCategoryTotals.map((category, index) => {
+    const start = creditCardPieEnd;
+    creditCardPieEnd += creditCardExpenseTotal > 0
+      ? (category.amount / creditCardExpenseTotal) * 100
+      : 0;
+    return {
+      ...category,
+      start,
+      end: creditCardPieEnd,
+      color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+    };
+  });
+  const creditCardPieGradient = `conic-gradient(${creditCardPieSlices
+    .map(slice => `${slice.color} ${slice.start}% ${slice.end}%`)
+    .join(', ')})`;
   const yearMoneyBurned = yearTransactions
     .filter(transaction => transaction.type === 'EXPENSE' && transaction.status === 'PAID')
     .reduce((total, transaction) => total + Math.max(
@@ -738,7 +755,6 @@ export default function DashboardPage() {
   const commitmentNeedleX = 130 + 100 * Math.cos(commitmentNeedleRadians);
   const commitmentNeedleY = 130 - 100 * Math.sin(commitmentNeedleRadians);
 
-  const CATEGORY_COLORS = ['#10b981', '#38bdf8', '#f59e0b', '#a855f7', '#f43f5e', '#6366f1'];
   const expensesByCategory: { [key: string]: number } = {};
   yearTransactions
     .filter(t => t.type === 'EXPENSE')
@@ -1718,22 +1734,30 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                {creditCardCategoryTotals.length > 0 ? (
-                  <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {creditCardCategoryTotals.map(({ category, amount }) => (
-                      <div key={category} className="rounded-xl bg-slate-950/60 border border-slate-800/80 p-3">
-                        <div className="flex items-center justify-between gap-3 text-xs">
-                          <span className="truncate text-slate-300">{category}</span>
-                          <strong className="shrink-0 text-slate-100">{formatCurrency(amount)}</strong>
+                {creditCardPieSlices.length > 0 ? (
+                  <div className="mt-5 grid grid-cols-1 md:grid-cols-[220px_1fr] items-center gap-6">
+                    <div
+                      role="img"
+                      aria-label={`Gráfico de pizza dos gastos com cartão de crédito por categoria. Total ${formatCurrency(creditCardExpenseTotal)}.`}
+                      className="mx-auto h-52 w-52 rounded-full border border-slate-700/80 shadow-lg shadow-sky-950/30"
+                      style={{ background: creditCardPieGradient }}
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {creditCardPieSlices.map(({ category, amount, color }) => (
+                        <div key={category} className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-slate-950/60 border border-slate-800/80 p-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                            <span className="truncate text-xs text-slate-300">{category}</span>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <strong className="block text-xs text-slate-100">{formatCurrency(amount)}</strong>
+                            <span className="text-[10px] text-slate-500">
+                              {creditCardExpenseTotal > 0 ? ((amount / creditCardExpenseTotal) * 100).toFixed(1) : '0.0'}%
+                            </span>
+                          </div>
                         </div>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
-                          <div
-                            className="h-full rounded-full bg-sky-500"
-                            style={{ width: `${creditCardExpenseTotal > 0 ? (amount / creditCardExpenseTotal) * 100 : 0}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <p className="mt-5 text-sm text-slate-500">
