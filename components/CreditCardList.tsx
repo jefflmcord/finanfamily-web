@@ -131,6 +131,26 @@ export default function CreditCardList({
     String(transaction.credit_card_id) === String(cardId) && transaction.status !== 'PAID'
   ).length;
 
+  const getCurrentInvoiceItems = (
+    card: CardItem,
+    period = getCurrentCardBillingPeriod(card.closing_day, card.due_day)
+  ) => {
+    const invoiceMonth = period.dueDate.slice(0, 7);
+
+    return transactions
+      .filter((transaction) =>
+        String(transaction.credit_card_id) === String(card.id) &&
+        transaction.type === 'EXPENSE' &&
+        transaction.due_date?.slice(0, 7) === invoiceMonth
+      )
+      .sort((first, second) => first.due_date.localeCompare(second.due_date));
+  };
+
+  const getCurrentInvoiceTotal = (card: CardItem) =>
+    getCurrentInvoiceItems(card)
+      .filter((transaction) => transaction.status !== 'PAID')
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+
   const getAvailableLimit = (card: CardItem) => {
     const committedAmount = transactions
       .filter((transaction) =>
@@ -220,14 +240,7 @@ export default function CreditCardList({
 
   function handleOpenInvoice(card: CardItem) {
     const period = getCurrentCardBillingPeriod(card.closing_day, card.due_day);
-    const invoiceMonth = period.dueDate.slice(0, 7);
-    const items = transactions
-      .filter((transaction) =>
-        String(transaction.credit_card_id) === String(card.id) &&
-        transaction.type === 'EXPENSE' &&
-        transaction.due_date?.slice(0, 7) === invoiceMonth
-      )
-      .sort((first, second) => first.due_date.localeCompare(second.due_date));
+    const items = getCurrentInvoiceItems(card, period);
 
     setSelectedCard(card);
     setInvoicePeriod(period);
@@ -367,6 +380,10 @@ export default function CreditCardList({
                     <strong className={getAvailableLimit(card) < 0 ? 'text-rose-400' : 'text-emerald-400'}>
                       {formatCurrency(getAvailableLimit(card))}
                     </strong>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Fatura atual:</span>
+                    <strong className="text-amber-400">{formatCurrency(getCurrentInvoiceTotal(card))}</strong>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Fecho da Fatura:</span>
