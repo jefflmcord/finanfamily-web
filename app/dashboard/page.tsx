@@ -59,6 +59,8 @@ export default function DashboardPage() {
   const [payableView, setPayableView] = useState<'LIST' | 'KANBAN'>('LIST');
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
   const [payingExpenses, setPayingExpenses] = useState(false);
+  const [settlementEntries, setSettlementEntries] = useState<Array<{ transaction: any; accountId: string; paidAmount: string }>>([]);
+  const [settlementError, setSettlementError] = useState('');
 
   // Modal Novo Lançamento
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -284,14 +286,14 @@ export default function DashboardPage() {
     if (!response.ok) throw new Error(data.error || 'Erro ao estornar o lançamento.');
   };
 
-  const payTransaction = async (tx: any) => {
+  const payTransaction = async (tx: any, accountId = tx.account_id || accounts[0]?.id || null, paidAmount = Number(tx.amount)) => {
     if (!canSettleTransactions) throw new Error('Você não tem permissão para baixar lançamentos.');
     const res = await authenticatedFetch(`${API_URL}/api/transactions/${tx.id}/pay`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        account_id: tx.account_id || accounts[0]?.id || null,
-        paid_amount: Number(tx.amount),
+        account_id: accountId,
+        paid_amount: paidAmount,
         payment_date: new Date().toISOString().split('T')[0],
       }),
     });
@@ -606,6 +608,12 @@ export default function DashboardPage() {
     .filter(t => t.type === 'EXPENSE' && t.status === 'PAID')
     .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
   const yearExpensePending = Math.max(0, yearExpenseTotal - yearExpensePaid);
+  const yearMoneyBurned = yearTransactions
+    .filter(transaction => transaction.type === 'EXPENSE' && transaction.status === 'PAID')
+    .reduce((total, transaction) => total + Math.max(
+      0,
+      Number(transaction.paid_amount ?? transaction.amount) - Number(transaction.amount || 0)
+    ), 0);
   const yearOverdueTransactions = yearTransactions.filter(
     t => t.type === 'EXPENSE' && getTransactionStatus(t) === 'OVERDUE'
   );
@@ -1067,30 +1075,61 @@ export default function DashboardPage() {
     setSelectedExpenseIds(selected ? payableExpenses.map(t => String(t.id)) : []);
   };
 
-  const handlePayExpenses = async (expenses: any[]) => {
+  const handlePayExpenses = (expenses: any[]) => {
     if (!canSettleTransactions || expenses.length === 0) return;
+    setSettlementEntries(expenses.map(transaction => ({
+      transaction,
+      accountId: transaction.account_id || accounts[0]?.id || '',
+      paidAmount: String(Number(transaction.amount || 0)),
+    })));
+    setSettlementError('');
+  };
+
+  const submitSettlement = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSettleTransactions || settlementEntries.length === 0) return;
+    const invalidEntry = settlementEntries.find(entry =>
+      !entry.accountId ||
+      !Number.isFinite(Number(entry.paidAmount)) ||
+      Number(entry.paidAmount) < Number(entry.transaction.amount)
+    );
+    if (invalidEntry) {
+      setSettlementError('Selecione a conta e informe um valor pago igual ou superior ao valor do lançamento.');
+      return;
+    }
 
     setPayingExpenses(true);
-    setError('');
+    setSettlementError('');
 
     try {
       const results = await Promise.allSettled(
-        expenses.map(payTransaction)
+        settlementEntries.map(entry => payTransaction(entry.transaction, entry.accountId, Number(entry.paidAmount)))
       );
-      const paidIds = expenses
+      const paidIds = settlementEntries
         .filter((_, index) => results[index].status === 'fulfilled')
-        .map(transaction => String(transaction.id));
+        .map(entry => String(entry.transaction.id));
       const failedCount = results.length - paidIds.length;
 
       setSelectedExpenseIds(ids => ids.filter(id => !paidIds.includes(id)));
+      setSettlementEntries(entries => entries.filter(entry => !paidIds.includes(String(entry.transaction.id))));
       if (failedCount > 0) {
-        setError(`${paidIds.length} lançamento(s) baixado(s); ${failedCount} não puderam ser atualizados.`);
+        setSettlementError(`${paidIds.length} lançamento(s) baixado(s); ${failedCount} não puderam ser atualizados.`);
+      } else {
+        setSettlementEntries([]);
       }
 
       await fetchData();
+    } catch (settlementSubmitError) {
+      setSettlementError(settlementSubmitError instanceof Error ? settlementSubmitError.message : 'Não foi possível concluir a baixa.');
     } finally {
       setPayingExpenses(false);
     }
+  };
+
+  const updateSettlementEntry = (transactionId: string, changes: Partial<{ accountId: string; paidAmount: string }>) => {
+    setSettlementEntries(entries => entries.map(entry =>
+      String(entry.transaction.id) === transactionId ? { ...entry, ...changes } : entry
+    ));
   };
 
   const handlePaySelectedExpenses = () => handlePayExpenses(selectedPayableExpenses);
@@ -1489,7 +1528,7 @@ export default function DashboardPage() {
               </div>
 
               {/* 1. CARDS MODERNOS DE INDICADORES (KPIs) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
                 {/* Card 1: Saldo em Contas */}
                 <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800/90 hover:border-slate-700 p-6 rounded-3xl shadow-xl relative overflow-hidden transition-all group">
                   <div className="flex items-center justify-between mb-4">
@@ -1615,6 +1654,24 @@ export default function DashboardPage() {
                         {yearCommitmentRate.toFixed(0)}%
                       </strong>
                     </span>
+                  </div>
+                </div>
+
+                {/* Card 5: Juros, multas e encargos pagos */}
+                <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/20 border border-slate-800/90 hover:border-amber-500/30 p-6 rounded-3xl shadow-xl relative overflow-hidden transition-all group">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs uppercase font-extrabold tracking-wider text-slate-400">
+                      Dinheiro queimado ({dashboardPeriodLabel})
+                    </span>
+                    <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <p className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
+                    {formatCurrency(yearMoneyBurned)}
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-400">
+                    Juros, multas e encargos pagos
                   </div>
                 </div>
               </div>
@@ -2549,6 +2606,119 @@ export default function DashboardPage() {
       >
         <Plus className="h-7 w-7" strokeWidth={2.5} />
       </button>}
+
+      {/* ================= MODAL DE BAIXA ================= */}
+      {settlementEntries.length > 0 && canSettleTransactions && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative my-auto max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-emerald-500/20 bg-slate-900 p-5 shadow-2xl sm:p-7">
+            <button
+              type="button"
+              onClick={() => {
+                if (payingExpenses) return;
+                setSettlementEntries([]);
+                setSettlementError('');
+              }}
+              disabled={payingExpenses}
+              aria-label="Fechar baixa"
+              className="absolute right-5 top-5 text-slate-400 hover:text-white disabled:opacity-50"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h3 className="mb-1 flex items-center gap-2 pr-8 text-xl font-extrabold text-white">
+              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+              Baixar lançamento{settlementEntries.length > 1 ? 's' : ''}
+            </h3>
+            <p className="mb-5 text-xs text-slate-400">
+              Informe a conta utilizada e o valor efetivamente pago. A diferença será registrada como juros, multa ou encargos.
+            </p>
+
+            <form onSubmit={submitSettlement} className="space-y-4">
+              {settlementEntries.map(entry => (
+                <section key={entry.transaction.id} className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-white">{entry.transaction.description}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Valor do lançamento: {formatCurrency(Number(entry.transaction.amount))}
+                      </p>
+                    </div>
+                    {settlementEntries.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setSettlementEntries(entries => entries.filter(item => item.transaction.id !== entry.transaction.id))}
+                        className="shrink-0 text-xs text-slate-500 hover:text-rose-400"
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="block text-xs font-semibold text-slate-400">
+                      Conta bancária usada
+                      <select
+                        required
+                        value={entry.accountId}
+                        onChange={event => updateSettlementEntry(String(entry.transaction.id), { accountId: event.target.value })}
+                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-emerald-500"
+                      >
+                        <option value="">Selecione uma conta</option>
+                        {accounts.map(account => (
+                          <option key={account.id} value={account.id}>{account.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-400">
+                      Valor pago (R$)
+                      <input
+                        type="number"
+                        required
+                        min={Number(entry.transaction.amount)}
+                        step="0.01"
+                        value={entry.paidAmount}
+                        onChange={event => updateSettlementEntry(String(entry.transaction.id), { paidAmount: event.target.value })}
+                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                  </div>
+                  {Number(entry.paidAmount) > Number(entry.transaction.amount) && (
+                    <p className="text-xs font-medium text-amber-400">
+                      Encargos: {formatCurrency(Number(entry.paidAmount) - Number(entry.transaction.amount))}
+                    </p>
+                  )}
+                </section>
+              ))}
+
+              {settlementError && (
+                <p role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-300">
+                  {settlementError}
+                </p>
+              )}
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={payingExpenses}
+                  onClick={() => {
+                    setSettlementEntries([]);
+                    setSettlementError('');
+                  }}
+                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={payingExpenses || settlementEntries.length === 0}
+                  className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-50"
+                >
+                  {payingExpenses ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {payingExpenses ? 'Processando...' : 'Confirmar baixa'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODAL DE EXCLUSÃO INTELIGENTE ================= */}
       {isDeleteModalOpen && txToDelete && canDeleteTransactions && (

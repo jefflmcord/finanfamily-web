@@ -77,6 +77,7 @@ export default function CreditCardList({
   const [selectedCard, setSelectedCard] = useState<CardItem | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
+  const [invoicePaidAmount, setInvoicePaidAmount] = useState('0');
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoicePeriod, setInvoicePeriod] = useState<CardBillingPeriod | null>(null);
 
@@ -233,6 +234,7 @@ export default function CreditCardList({
     setShowPaymentForm(false);
     setInvoiceItems(items);
     setInvoiceTotal(items.reduce((total, item) => total + Number(item.amount || 0), 0));
+    setInvoicePaidAmount(String(items.filter(item => item.status !== 'PAID').reduce((total, item) => total + Number(item.amount || 0), 0)));
     setInvoiceIsPaid(items.length > 0 && items.every((item) => item.status === 'PAID'));
     setSelectedAccountId(items.find((item) => item.account_id)?.account_id || accounts[0]?.id || '');
     setPaymentDate(new Date().toISOString().split('T')[0]);
@@ -245,6 +247,12 @@ export default function CreditCardList({
 
     const pendingItems = invoiceItems.filter((item) => item.status !== 'PAID');
     if (pendingItems.length === 0) return;
+    const totalPaidAmount = Number(invoicePaidAmount);
+    const pendingAmount = pendingItems.reduce((total, item) => total + Number(item.amount || 0), 0);
+    if (!Number.isFinite(totalPaidAmount) || totalPaidAmount < pendingAmount) {
+      setPaymentError('O valor total pago deve ser igual ou superior ao total pendente da fatura.');
+      return;
+    }
     if (!selectedAccountId && pendingItems.some((item) => !item.account_id)) {
       setPaymentError('Selecione uma conta para registrar o pagamento da fatura.');
       return;
@@ -254,13 +262,15 @@ export default function CreditCardList({
     setPaymentError('');
     const paidIds: string[] = [];
     try {
-      for (const item of pendingItems) {
+      const additionalFees = totalPaidAmount - pendingAmount;
+      for (const [index, item] of pendingItems.entries()) {
+        const itemPaidAmount = Number(item.amount) + (index === 0 ? additionalFees : 0);
         const res = await authenticatedFetch(`${apiUrl}/api/transactions/${item.id}/pay`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             account_id: selectedAccountId || item.account_id || null,
-            paid_amount: Number(item.amount),
+            paid_amount: itemPaidAmount,
             payment_date: paymentDate
           })
         });
@@ -278,6 +288,12 @@ export default function CreditCardList({
       await loadData();
       if (onInvoicePaid) await onInvoicePaid();
     } catch (err: any) {
+      if (paidIds.length > 0) {
+        const remainingAmount = pendingItems
+          .filter(item => !paidIds.includes(item.id))
+          .reduce((total, item) => total + Number(item.amount || 0), 0);
+        setInvoicePaidAmount(String(remainingAmount));
+      }
       setPaymentError(paidIds.length > 0
         ? `${paidIds.length} lançamento(s) baixado(s). O restante não foi atualizado: ${err.message}`
         : err.message || 'Falha ao liquidar fatura.');
@@ -492,6 +508,23 @@ export default function CreditCardList({
                             </select>
                           </div>
                         </div>
+                        <label className="block text-xs font-medium text-slate-400">
+                          Valor total pago
+                          <input
+                            type="number"
+                            required
+                            min={pendingTotal}
+                            step="0.01"
+                            value={invoicePaidAmount}
+                            onChange={(event) => setInvoicePaidAmount(event.target.value)}
+                            className="mt-1.5 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                          />
+                          {Number(invoicePaidAmount) > pendingTotal && (
+                            <span className="mt-1 block text-amber-400">
+                              Encargos: {formatCurrency(Number(invoicePaidAmount) - pendingTotal)}
+                            </span>
+                          )}
+                        </label>
 
                         <div className="flex justify-end gap-2 pt-2">
                           <button
