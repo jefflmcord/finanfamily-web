@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -16,8 +16,22 @@ import {
   CheckCircle2, FileText, DollarSign, Layers, PieChart as PieIcon, 
   BarChart3, Trophy, Edit, Trash2, AlertTriangle, Calendar, Filter, Circle, CheckCircle, AlertCircle,
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Sparkles, Clock,
-  Printer, FileDown, FileSpreadsheet, Menu, Plus, User, Users, Share2
+  Printer, FileDown, FileSpreadsheet, Menu, Plus, User, Users, Share2, Settings as SettingsIcon, Sun, Moon
 } from 'lucide-react';
+
+type InterfaceTheme = 'dark' | 'light';
+
+const getInterfaceTheme = (): InterfaceTheme =>
+  window.localStorage.getItem('@FinanFamily:theme') === 'light' ? 'light' : 'dark';
+
+const subscribeToInterfaceTheme = (onChange: () => void) => {
+  window.addEventListener('storage', onChange);
+  window.addEventListener('finanfamily-theme-change', onChange);
+  return () => {
+    window.removeEventListener('storage', onChange);
+    window.removeEventListener('finanfamily-theme-change', onChange);
+  };
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -25,6 +39,12 @@ export default function DashboardPage() {
   const [activeModule, setActiveModule] = useState<'cadastros' | 'pagar' | 'receber' | 'investimentos'>('cadastros');
   const [activeSubMenu, setActiveSubMenu] = useState<string>('geral');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const theme = useSyncExternalStore(
+    subscribeToInterfaceTheme,
+    getInterfaceTheme,
+    () => 'dark'
+  );
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -92,6 +112,29 @@ export default function DashboardPage() {
   const [hoveredCreditCardCategory, setHoveredCreditCardCategory] = useState<string | null>(null);
   const [selectedCreditCardCategory, setSelectedCreditCardCategory] = useState<string | null>(null);
   const [hoveredProjectionPointIndex, setHoveredProjectionPointIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-light', theme === 'light');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute(
+      'content',
+      theme === 'light' ? '#f8fafc' : '#020617'
+    );
+  }, [theme]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [settingsOpen]);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    window.localStorage.setItem('@FinanFamily:theme', nextTheme);
+    window.dispatchEvent(new Event('finanfamily-theme-change'));
+  };
 
   // Modal Cartão & Objetivos
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -1656,9 +1699,101 @@ export default function DashboardPage() {
               <p className="hidden truncate text-xs text-slate-400 sm:block" title={userEmail}>{userEmail || 'Usuário conectado'}</p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Abrir configurações"
+            title="Configurações"
+            className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+          >
+            <SettingsIcon className="h-5 w-5" />
+          </button>
           <button onClick={() => { localStorage.clear(); router.push('/login'); }} aria-label="Sair" className="flex items-center gap-2 text-slate-400 hover:text-rose-400 text-sm font-semibold p-2"><LogOut className="w-5 h-5" /><span className="hidden sm:inline">Sair</span></button>
         </div>
       </header>
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-[60]">
+          <button
+            type="button"
+            aria-label="Fechar configurações"
+            onClick={() => setSettingsOpen(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-drawer-title"
+            className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col overflow-hidden border-l border-slate-800 bg-slate-950 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4 sm:px-7">
+              <div>
+                <h2 id="settings-drawer-title" className="text-lg font-extrabold text-white">Configurações</h2>
+                <p className="mt-1 text-xs text-slate-400">Preferências e gestão da família</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(false)}
+                autoFocus
+                aria-label="Fechar configurações"
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-6 overflow-y-auto p-5 sm:p-7">
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-300">
+                    {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Aparência</h3>
+                    <p className="mt-0.5 text-xs text-slate-400">Escolha entre o modo claro e o modo escuro.</p>
+                  </div>
+                </div>
+                <div role="group" aria-label="Tema da interface" className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={theme === 'light'}
+                    onClick={() => theme !== 'light' && toggleTheme()}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
+                      theme === 'light'
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                        : 'border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Sun className="h-4 w-4" /> Claro
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={theme === 'dark'}
+                    onClick={() => theme !== 'dark' && toggleTheme()}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
+                      theme === 'dark'
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                        : 'border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Moon className="h-4 w-4" /> Escuro
+                  </button>
+                </div>
+              </section>
+
+              {familyAccess?.role === 'OWNER' && (
+                <section className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Membros da família</h3>
+                    <p className="mt-1 text-xs text-slate-400">Convide pessoas e gerencie as permissões de acesso.</p>
+                  </div>
+                  <FamilyMembersManager showHeading={false} />
+                </section>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* BODY */}
       <div className="flex flex-1 min-h-[calc(100vh-4rem)] md:min-h-[calc(100vh-5rem)]">
@@ -1687,9 +1822,6 @@ export default function DashboardPage() {
                 <button onClick={() => { setActiveSubMenu('contas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Wallet className="w-5 h-5" /> Contas</button>
                 <button onClick={() => { setActiveSubMenu('categorias'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'categorias' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Layers className="w-5 h-5" /> Categorias</button>
               </>}
-              {familyAccess?.role === 'OWNER' && (
-                <button onClick={() => { setActiveSubMenu('membros'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'membros' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Users className="w-5 h-5" /> Membros da família</button>
-              )}
             </>
           )}
           {activeModule === 'pagar' && canReadFamily && <button onClick={() => { setActiveSubMenu('contas_pagar'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><FileText className="w-5 h-5" /> Lançamentos a Pagar</button>}
@@ -3223,10 +3355,6 @@ export default function DashboardPage() {
                 canManage={canManageCategories}
               />
             </div>
-          )}
-
-          {activeModule === 'cadastros' && activeSubMenu === 'membros' && familyAccess?.role === 'OWNER' && (
-            <FamilyMembersManager />
           )}
 
           {/* NOVO LAYOUT MODERNIZADO: CONTAS A PAGAR */}

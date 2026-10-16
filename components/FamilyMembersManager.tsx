@@ -54,7 +54,7 @@ const DEFAULT_PERMISSIONS: Record<PermissionKey, boolean> = {
   goals_manage: false,
 };
 
-export default function FamilyMembersManager() {
+export default function FamilyMembersManager({ showHeading = true }: { showHeading?: boolean }) {
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [email, setEmail] = useState('');
@@ -178,10 +178,12 @@ export default function FamilyMembersManager() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl sm:text-2xl font-extrabold text-white">Membros da família</h2>
-        <p className="mt-1 text-sm text-slate-400">Convide pessoas usando o e-mail delas e controle o que podem fazer.</p>
-      </div>
+      {showHeading && (
+        <div>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-white">Membros da família</h2>
+          <p className="mt-1 text-sm text-slate-400">Convide pessoas usando o e-mail delas e controle o que podem fazer.</p>
+        </div>
+      )}
 
       {error && <p role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p>}
       {notice && <p role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{notice}</p>}

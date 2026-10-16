@@ -8,3 +8,113 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+html.theme-light {
+  color-scheme: light;
+}
+
+html.theme-light body,
+html.theme-light [class*="bg-slate-950"] {
+  background-color: #f8fafc !important;
+}
+
+html.theme-light [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+}
+
+html.theme-light [class*="bg-slate-800"] {
+  background-color: #e2e8f0 !important;
+}
+
+html.theme-light [class*="bg-slate-700"] {
+  background-color: #cbd5e1 !important;
+}
+
+html.theme-light [class~="text-white"],
+html.theme-light [class~="text-slate-50"],
+html.theme-light [class~="text-slate-100"] {
+  color: #0f172a !important;
+}
+
+html.theme-light [class~="text-slate-200"] {
+  color: #1e293b !important;
+}
+
+html.theme-light [class~="text-slate-300"] {
+  color: #334155 !important;
+}
+
+html.theme-light [class~="text-slate-400"] {
+  color: #64748b !important;
+}
+
+html.theme-light [class~="text-slate-500"] {
+  color: #64748b !important;
+}
+
+html.theme-light [class~="text-slate-600"] {
+  color: #475569 !important;
+}
+
+html.theme-light [class~="text-emerald-300"],
+html.theme-light [class~="text-emerald-400"],
+html.theme-light [class~="text-green-300"],
+html.theme-light [class~="text-green-400"] {
+  color: #047857 !important;
+}
+
+html.theme-light [class~="text-rose-300"],
+html.theme-light [class~="text-rose-400"],
+html.theme-light [class~="text-red-300"],
+html.theme-light [class~="text-red-400"] {
+  color: #be123c !important;
+}
+
+html.theme-light [class~="text-amber-300"],
+html.theme-light [class~="text-amber-400"],
+html.theme-light [class~="text-yellow-300"],
+html.theme-light [class~="text-yellow-400"] {
+  color: #b45309 !important;
+}
+
+html.theme-light [class~="text-sky-300"],
+html.theme-light [class~="text-sky-400"],
+html.theme-light [class~="text-blue-300"],
+html.theme-light [class~="text-blue-400"],
+html.theme-light [class~="text-indigo-300"],
+html.theme-light [class~="text-indigo-400"] {
+  color: #1d4ed8 !important;
+}
+
+html.theme-light [class*="border-slate-800"] {
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light [class*="border-slate-700"] {
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-light [class~="from-slate-900"],
+html.theme-light [class~="via-slate-900"],
+html.theme-light [class~="to-slate-950"] {
+  background-image: none !important;
+  background-color: #ffffff !important;
+}
+
+html.theme-light [class~="hover:bg-slate-800"]:hover,
+html.theme-light [class~="hover:bg-slate-800/80"]:hover {
+  background-color: #f1f5f9 !important;
+}
+
+html.theme-light [class~="hover:bg-slate-700"]:hover {
+  background-color: #e2e8f0 !important;
+}
+
+html.theme-light [class~="hover:text-white"]:hover {
+  color: #0f172a !important;
+}
+
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder {
+  color: #94a3b8;
+}
