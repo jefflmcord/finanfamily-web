@@ -13,7 +13,7 @@ import {
   CheckCircle2, FileText, DollarSign, Layers, PieChart as PieIcon, 
   BarChart3, Trophy, Edit, Trash2, AlertTriangle, Calendar, Filter, Circle, CheckCircle, AlertCircle,
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Sparkles, Clock,
-  Printer, FileDown, FileSpreadsheet
+  Printer, FileDown, FileSpreadsheet, Menu, Plus
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -947,14 +947,14 @@ export default function DashboardPage() {
     const isSelected = selectedExpenseIds.includes(String(t.id));
 
     return (
-      <div key={t.id} className={`p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
+      <div key={t.id} className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
         <div className="flex items-center gap-4 min-w-0">
           {isIncome ? (
             <button
               onClick={() => handleToggleStatus(t)}
               title={isPaid ? 'Marcar como pendente' : 'Marcar como pago'}
               aria-label={isPaid ? `Marcar ${t.description} como pendente` : `Marcar ${t.description} como pago`}
-              className={`flex-shrink-0 transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
+              className={`flex-shrink-0 p-2 -ml-2 transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
             >
               {isPaid ? <CheckCircle className="w-7 h-7" /> : isOverdue ? <AlertCircle className="w-7 h-7" /> : <Circle className="w-7 h-7" />}
             </button>
@@ -969,15 +969,15 @@ export default function DashboardPage() {
               onClick={() => handleExpenseSelection(String(t.id), !isSelected)}
               title={isSelected ? 'Desmarcar lançamento' : 'Selecionar para baixa'}
               aria-label={`${isSelected ? 'Desmarcar' : 'Selecionar'} ${t.description} para baixa`}
-              className={`flex-shrink-0 transition-colors disabled:opacity-40 ${isSelected ? 'text-emerald-400' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
+              className={`flex-shrink-0 p-2 -ml-2 transition-colors disabled:opacity-40 ${isSelected ? 'text-emerald-400' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
             >
               {isSelected ? <CheckCircle className="w-7 h-7" /> : isOverdue ? <AlertCircle className="w-7 h-7" /> : <Circle className="w-7 h-7" />}
             </button>
           )}
           
-          <div>
-            <p className={`font-bold text-base ${isPaid ? 'text-slate-400 line-through' : 'text-white'}`}>{t.description}</p>
-            <div className="flex items-center gap-2 mt-1 text-xs font-medium">
+          <div className="min-w-0">
+            <p className={`font-bold text-base break-words ${isPaid ? 'text-slate-400 line-through' : 'text-white'}`}>{t.description}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-1 text-xs font-medium">
               <span className={`px-2 py-0.5 rounded-md ${isPaid ? 'bg-slate-800 text-slate-400' : isOverdue ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-300'}`}>
                 <Calendar className="w-3 h-3 inline mr-1 -mt-0.5" />
                 {formatDatePT(t.due_date)}
@@ -996,7 +996,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
           <span className={`text-lg font-black ${isPaid ? 'text-slate-500' : isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatCurrency(t.amount)}
           </span>
@@ -1010,9 +1010,9 @@ export default function DashboardPage() {
                 <CheckCircle2 className="w-4 h-4" /> Baixar
               </button>
             )}
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => openEditModal(t)} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm"><Edit className="w-4 h-4" /></button>
-              <button onClick={() => openDeleteModal(t)} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>
+            <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              <button onClick={() => openEditModal(t)} aria-label={`Editar ${t.description}`} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm"><Edit className="w-4 h-4" /></button>
+              <button onClick={() => openDeleteModal(t)} aria-label={`Excluir ${t.description}`} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>
             </div>
           </div>
         </div>
@@ -1021,23 +1021,23 @@ export default function DashboardPage() {
   };
 
   const renderFilterBar = () => (
-    <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl shadow-lg flex flex-col md:flex-row gap-4 items-center justify-between">
+    <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl shadow-lg flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
       <div className="flex items-center gap-2 text-slate-300 font-bold">
         <Filter className="w-5 h-5 text-emerald-400" /> Filtros
       </div>
-      <div className="flex flex-wrap gap-3">
-        <select value={filterMonth} onChange={e => { setSelectedExpenseIds([]); setFilterMonth(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)); }} className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2 outline-none focus:border-emerald-500 transition-colors">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full md:w-auto">
+        <select value={filterMonth} onChange={e => { setSelectedExpenseIds([]); setFilterMonth(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)); }} className="w-full min-w-0 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 transition-colors">
           <option value="ALL">Todos os meses</option>
           <option value={1}>Janeiro</option><option value={2}>Fevereiro</option><option value={3}>Março</option>
           <option value={4}>Abril</option><option value={5}>Maio</option><option value={6}>Junho</option>
           <option value={7}>Julho</option><option value={8}>Agosto</option><option value={9}>Setembro</option>
           <option value={10}>Outubro</option><option value={11}>Novembro</option><option value={12}>Dezembro</option>
         </select>
-        <select value={filterYear} onChange={e => { setSelectedExpenseIds([]); setFilterYear(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)); }} className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2 outline-none focus:border-emerald-500 transition-colors">
+        <select value={filterYear} onChange={e => { setSelectedExpenseIds([]); setFilterYear(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)); }} className="w-full min-w-0 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 transition-colors">
           <option value="ALL">Todos os anos</option>
           {[2024, 2025, 2026, 2027, 2028, 2029].map(y => <option key={y} value={y}>{y}</option>)}
         </select>
-        <select value={filterStatus} onChange={e => { setSelectedExpenseIds([]); setFilterStatus(e.target.value as any); }} className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2 outline-none focus:border-emerald-500 transition-colors">
+        <select value={filterStatus} onChange={e => { setSelectedExpenseIds([]); setFilterStatus(e.target.value as any); }} className="w-full min-w-0 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 transition-colors">
           <option value="ALL">Todos os Status</option>
           <option value="PENDING">A Pagar / Pendente</option>
           <option value="OVERDUE">Atrasados</option>
@@ -1056,10 +1056,18 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col font-sans">
       
       {/* HEADER */}
-      <header className="bg-slate-900 border-b border-slate-800 h-20 px-6 flex items-center justify-between z-30">
+      <header className="bg-slate-900 border-b border-slate-800 h-16 sm:h-20 px-4 sm:px-6 flex items-center justify-between z-30">
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Abrir menu de navegação"
+            className="md:hidden p-2 -ml-2 rounded-xl text-slate-300 hover:bg-slate-800"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/25 border border-emerald-500/30 flex items-center justify-center text-emerald-400"><Wallet className="w-6 h-6" /></div>
-          <span className="font-extrabold text-xl text-white tracking-tight">Finan<span className="text-emerald-400">Family</span></span>
+          <span className="font-extrabold text-lg sm:text-xl text-white tracking-tight">Finan<span className="text-emerald-400">Family</span></span>
         </div>
         <nav className="hidden md:flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
           <button onClick={() => { setActiveModule('cadastros'); setActiveSubMenu('geral'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'cadastros' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Cadastros</button>
@@ -1067,37 +1075,51 @@ export default function DashboardPage() {
           <button onClick={() => { setActiveModule('receber'); setActiveSubMenu('contas_receber'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'receber' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Contas a Receber</button>
           <button onClick={() => { setActiveModule('investimentos'); setActiveSubMenu('metas'); }} className={`px-5 py-2.5 rounded-xl font-bold text-sm ${activeModule === 'investimentos' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}>Investimentos</button>
         </nav>
-        <div className="flex items-center gap-4">
-          <button onClick={() => setIsTxModalOpen(true)} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-5 rounded-xl shadow-lg flex items-center gap-2 cursor-pointer transition-all"><PlusCircle className="w-5 h-5" /> Novo Lançamento</button>
-          <button onClick={() => { localStorage.clear(); router.push('/login'); }} className="flex items-center gap-2 text-slate-400 hover:text-rose-400 text-sm font-semibold p-2"><LogOut className="w-5 h-5" /> Sair</button>
+        <div className="flex items-center gap-2 sm:gap-4">
+          <button onClick={() => setIsTxModalOpen(true)} className="hidden md:flex bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-5 rounded-xl shadow-lg items-center gap-2 cursor-pointer transition-all"><PlusCircle className="w-5 h-5" /> Novo Lançamento</button>
+          <button onClick={() => { localStorage.clear(); router.push('/login'); }} aria-label="Sair" className="flex items-center gap-2 text-slate-400 hover:text-rose-400 text-sm font-semibold p-2"><LogOut className="w-5 h-5" /><span className="hidden sm:inline">Sair</span></button>
         </div>
       </header>
 
       {/* BODY */}
-      <div className="flex flex-1 min-h-[calc(100vh-5rem)]">
-        <aside className={`fixed md:static inset-y-0 left-0 z-20 w-64 bg-slate-900/60 border-r border-slate-800 flex flex-col p-4 space-y-2 transition-transform ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <div className="flex flex-1 min-h-[calc(100vh-4rem)] md:min-h-[calc(100vh-5rem)]">
+        {mobileMenuOpen && (
+          <button
+            type="button"
+            aria-label="Fechar menu de navegação"
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          />
+        )}
+        <aside className={`fixed md:static inset-y-0 left-0 z-50 md:z-20 w-72 max-w-[85vw] md:w-64 md:max-w-none max-h-[100dvh] overflow-y-auto overscroll-contain bg-slate-900 border-r border-slate-800 flex flex-col p-4 space-y-2 transition-transform ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800 md:hidden"><span className="font-bold text-white">Menu</span><button onClick={() => setMobileMenuOpen(false)}><X className="w-5 h-5 text-slate-400" /></button></div>
+          <div className="grid grid-cols-2 gap-2 pb-3 mb-2 border-b border-slate-800 md:hidden">
+            <button onClick={() => { setActiveModule('cadastros'); setActiveSubMenu('geral'); }} className={`rounded-xl px-3 py-2.5 text-xs font-bold ${activeModule === 'cadastros' && activeSubMenu === 'geral' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-300'}`}><LayoutDashboard className="w-4 h-4 inline mr-1.5" />Visão Geral</button>
+            <button onClick={() => { setActiveModule('pagar'); setActiveSubMenu('contas_pagar'); }} className={`rounded-xl px-3 py-2.5 text-xs font-bold ${activeModule === 'pagar' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-300'}`}><FileText className="w-4 h-4 inline mr-1.5" />A Pagar</button>
+            <button onClick={() => { setActiveModule('receber'); setActiveSubMenu('contas_receber'); }} className={`rounded-xl px-3 py-2.5 text-xs font-bold ${activeModule === 'receber' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-300'}`}><DollarSign className="w-4 h-4 inline mr-1.5" />A Receber</button>
+            <button onClick={() => { setActiveModule('investimentos'); setActiveSubMenu('metas'); }} className={`rounded-xl px-3 py-2.5 text-xs font-bold ${activeModule === 'investimentos' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-300'}`}><Target className="w-4 h-4 inline mr-1.5" />Investimentos</button>
+          </div>
           <p className="text-xs uppercase font-extrabold text-slate-500 px-3 pb-1">Menus do Módulo</p>
           {activeModule === 'cadastros' && (
             <>
-              <button onClick={() => setActiveSubMenu('geral')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'geral' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><LayoutDashboard className="w-5 h-5" /> Visão Geral</button>
-              <button onClick={() => setActiveSubMenu('cartoes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'cartoes' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><CreditCard className="w-5 h-5" /> Cartões</button>
-              <button onClick={() => setActiveSubMenu('contas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Wallet className="w-5 h-5" /> Contas</button>
-              <button onClick={() => setActiveSubMenu('categorias')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'categorias' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Layers className="w-5 h-5" /> Categorias</button>
+              <button onClick={() => { setActiveSubMenu('geral'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'geral' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><LayoutDashboard className="w-5 h-5" /> Visão Geral</button>
+              <button onClick={() => { setActiveSubMenu('cartoes'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'cartoes' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><CreditCard className="w-5 h-5" /> Cartões</button>
+              <button onClick={() => { setActiveSubMenu('contas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Wallet className="w-5 h-5" /> Contas</button>
+              <button onClick={() => { setActiveSubMenu('categorias'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'categorias' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Layers className="w-5 h-5" /> Categorias</button>
             </>
           )}
-          {activeModule === 'pagar' && <button onClick={() => setActiveSubMenu('contas_pagar')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><FileText className="w-5 h-5" /> Lançamentos a Pagar</button>}
-          {activeModule === 'receber' && <button onClick={() => setActiveSubMenu('contas_receber')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><DollarSign className="w-5 h-5" /> Lançamentos a Receber</button>}
-          {activeModule === 'investimentos' && <button onClick={() => setActiveSubMenu('metas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Target className="w-5 h-5" /> Metas & Objetivos</button>}
+          {activeModule === 'pagar' && <button onClick={() => { setActiveSubMenu('contas_pagar'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><FileText className="w-5 h-5" /> Lançamentos a Pagar</button>}
+          {activeModule === 'receber' && <button onClick={() => { setActiveSubMenu('contas_receber'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><DollarSign className="w-5 h-5" /> Lançamentos a Receber</button>}
+          {activeModule === 'investimentos' && <button onClick={() => { setActiveSubMenu('metas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Target className="w-5 h-5" /> Metas & Objetivos</button>}
         </aside>
 
-        <main className="flex-1 p-6 md:p-10 max-w-7xl w-full mx-auto space-y-8">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-10 pb-24 md:pb-10 max-w-7xl w-full mx-auto space-y-6 md:space-y-8">
           {error && <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm font-medium">{error}</div>}
 
           {activeModule === 'cadastros' && activeSubMenu === 'geral' && (
             <div className="space-y-8">
               {/* TOP BAR: SAUDAÇÃO + FILTRO DE ANO E VISÃO */}
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900/90 to-emerald-950/30 border border-slate-800/90 p-6 rounded-3xl shadow-xl">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900/90 to-emerald-950/30 border border-slate-800/90 p-4 sm:p-6 rounded-3xl shadow-xl">
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold mb-1">
                     <Sparkles className="w-3.5 h-3.5" />
@@ -1113,11 +1135,11 @@ export default function DashboardPage() {
 
                 <div className="flex flex-wrap items-center gap-3">
                   {/* Seletor de Modo (Previsto+Realizado vs Realizado vs Pendente) */}
-                  <div className="flex items-center bg-slate-950 border border-slate-800 p-1 rounded-2xl text-xs font-bold">
+                  <div className="w-full sm:w-auto flex items-center justify-between bg-slate-950 border border-slate-800 p-1 rounded-2xl text-[11px] sm:text-xs font-bold">
                     <button
                       type="button"
                       onClick={() => setChartStatusMode('ALL')}
-                      className={`px-3 py-2 rounded-xl transition-all cursor-pointer ${
+                      className={`px-2 sm:px-3 py-2 rounded-xl transition-all cursor-pointer ${
                         chartStatusMode === 'ALL'
                           ? 'bg-emerald-500 text-slate-950 shadow-sm'
                           : 'text-slate-400 hover:text-white'
@@ -1128,7 +1150,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => setChartStatusMode('PAID')}
-                      className={`px-3 py-2 rounded-xl transition-all cursor-pointer ${
+                      className={`px-2 sm:px-3 py-2 rounded-xl transition-all cursor-pointer ${
                         chartStatusMode === 'PAID'
                           ? 'bg-emerald-500 text-slate-950 shadow-sm'
                           : 'text-slate-400 hover:text-white'
@@ -1139,7 +1161,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => setChartStatusMode('PENDING')}
-                      className={`px-3 py-2 rounded-xl transition-all cursor-pointer ${
+                      className={`px-2 sm:px-3 py-2 rounded-xl transition-all cursor-pointer ${
                         chartStatusMode === 'PENDING'
                           ? 'bg-emerald-500 text-slate-950 shadow-sm'
                           : 'text-slate-400 hover:text-white'
@@ -1150,7 +1172,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Filtro de Ano com navegação rápida */}
-                  <div className="flex flex-wrap items-center gap-1 bg-slate-950 border border-slate-800 rounded-2xl p-1.5">
+                  <div className="w-full sm:w-auto flex flex-wrap items-center gap-1 bg-slate-950 border border-slate-800 rounded-2xl p-1.5">
                     <select
                       aria-label="Filtrar dashboard por mês"
                       value={dashboardMonth}
@@ -1987,7 +2009,7 @@ export default function DashboardPage() {
 
           {activeModule === 'cadastros' && activeSubMenu === 'cartoes' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center"><h2 className="text-2xl font-extrabold text-white">Cartões de Crédito</h2><button onClick={() => setIsCardModalOpen(true)} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl">+ Novo Cartão</button></div>
+              <div className="flex flex-wrap justify-between items-center gap-3"><h2 className="text-xl sm:text-2xl font-extrabold text-white">Cartões de Crédito</h2><button onClick={() => setIsCardModalOpen(true)} className="bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl">+ Novo Cartão</button></div>
               <CreditCardList familyId={familyId} refreshTrigger={creditCards.length + transactions.length} onInvoicePaid={fetchData} />
             </div>
           )}
@@ -2017,32 +2039,42 @@ export default function DashboardPage() {
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>
-                  <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white">Contas a Pagar</h2>
                   <p className="text-slate-400 text-sm mt-1">Controle e organize as suas despesas.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={printPayableExpenses}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
+                    aria-label="Imprimir contas a pagar"
+                    title="Imprimir"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
                   >
-                    <Printer className="w-4 h-4" /> Imprimir
+                  <Printer className="w-4 h-4" /><span className="hidden sm:inline">Imprimir</span>
                   </button>
                   <button
                     type="button"
                     onClick={exportPayableExpensesToPdf}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
+                    aria-label="Exportar contas a pagar para PDF"
+                    title="Exportar PDF"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
                   >
-                    <FileDown className="w-4 h-4" /> Exportar PDF
+                    <FileDown className="w-4 h-4" /><span className="hidden sm:inline">Exportar PDF</span>
                   </button>
                   <button
                     type="button"
                     onClick={exportPayableExpensesToExcel}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
+                    aria-label="Exportar contas a pagar para planilha Excel"
+                    title="Exportar XLSX"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
                   >
-                    <FileSpreadsheet className="w-4 h-4" /> Exportar XLSX
+                    <FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline">Exportar XLSX</span>
                   </button>
-                  <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }}
+                    className="hidden md:flex bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-sm items-center gap-2"
+                  >
                     <PlusCircle className="w-4 h-4" /> Adicionar
                   </button>
                 </div>
@@ -2062,7 +2094,7 @@ export default function DashboardPage() {
                   />
                   Selecionar lançamentos pendentes
                 </label>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {selectedPayableExpenses.length > 0 && (
                     <span className="text-xs text-slate-400">{selectedPayableExpenses.length} selecionado(s)</span>
                   )}
@@ -2094,12 +2126,12 @@ export default function DashboardPage() {
           {/* NOVO LAYOUT MODERNIZADO: CONTAS A RECEBER */}
           {activeModule === 'receber' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
-                  <h2 className="text-2xl font-extrabold text-white">Contas a Receber</h2>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white">Contas a Receber</h2>
                   <p className="text-slate-400 text-sm mt-1">Monitorize as suas entradas e receitas previstas.</p>
                 </div>
-                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2">
+                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="hidden md:flex bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-sm items-center gap-2">
                   <PlusCircle className="w-4 h-4" /> Adicionar
                 </button>
               </div>
@@ -2122,12 +2154,12 @@ export default function DashboardPage() {
 
           {activeModule === 'investimentos' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
                   <h2 className="text-2xl font-extrabold text-white">Metas & Objetivos de Investimento</h2>
                   <p className="text-slate-400 text-sm">Defina objetivos e distribua o valor automaticamente nas contas a pagar na categoria "Investimento".</p>
                 </div>
-                <button onClick={() => setIsGoalModalOpen(true)} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 px-5 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg">
+                <button onClick={() => setIsGoalModalOpen(true)} className="self-start bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 px-5 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg">
                   <PlusCircle className="w-5 h-5" /> Novo Objetivo
                 </button>
               </div>
@@ -2179,6 +2211,20 @@ export default function DashboardPage() {
           )}
         </main>
       </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          if (activeModule === 'receber') setTxType('INCOME');
+          else setTxType('EXPENSE');
+          setIsTxModalOpen(true);
+        }}
+        aria-label="Adicionar lançamento"
+        title="Novo lançamento"
+        className="fixed right-5 bottom-5 mb-[env(safe-area-inset-bottom)] z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-slate-950 shadow-[0_8px_30px_rgba(16,185,129,0.4)] transition-transform active:scale-95"
+      >
+        <Plus className="h-7 w-7" strokeWidth={2.5} />
+      </button>
 
       {/* ================= MODAL DE EXCLUSÃO INTELIGENTE ================= */}
       {isDeleteModalOpen && txToDelete && (
@@ -2257,8 +2303,8 @@ export default function DashboardPage() {
 
       {/* ================= MODAL DE NOVO LANÇAMENTO ================= */}
       {isTxModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative my-8">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-5 sm:p-8 shadow-2xl relative my-auto">
             <button onClick={() => setIsTxModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"><X className="w-6 h-6" /></button>
             <h3 className="text-2xl font-extrabold text-white mb-6">Novo Lançamento</h3>
             <form onSubmit={handleSaveTransaction} className="space-y-4">
