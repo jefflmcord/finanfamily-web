@@ -2890,6 +2890,43 @@ export default function DashboardPage() {
                     .map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
                 </select>
               </div>
+              {txType === 'EXPENSE' && (
+                <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
+                    <label className="flex items-center gap-2 text-sm font-bold text-slate-100 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={txRepeatMonthly}
+                        onChange={event => {
+                          setTxRepeatMonthly(event.target.checked);
+                          if (event.target.checked) {
+                            setTxTotalInstallments('1');
+                            setTxStartInstallment('1');
+                            setTxAmountMode('TOTAL');
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      Repetir esta conta mensalmente
+                    </label>
+                    {txRepeatMonthly && (
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Quantidade de meses</label>
+                        <input
+                          type="number"
+                          min="2"
+                          max="120"
+                          required
+                          value={txRecurrenceMonths}
+                          onChange={event => setTxRecurrenceMonths(event.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"
+                        />
+                        <p className="mt-2 text-xs text-slate-400">
+                          Serão criadas {txRecurrenceMonths || 0} contas a pagar mensais, cada uma no valor de {formatCurrency(Number(txAmount) || 0)}.
+                        </p>
+                      </div>
+                    )}
+                </section>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">{txRepeatMonthly ? 'Valor de cada mês (R$)' : Number(txTotalInstallments) > 1 && txAmountMode === 'INSTALLMENT' ? 'Valor de Cada Parcela (R$)' : 'Valor Total (R$)'}</label><input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div>
@@ -2902,47 +2939,11 @@ export default function DashboardPage() {
               ) : (
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Conta Bancária</label><select value={txAccountId} onChange={e => setTxAccountId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"><option value="">Selecione a conta...</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
               )}
-              {txType === 'EXPENSE' && (
-                <section className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-3">
-                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-200 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={txRepeatMonthly}
-                      onChange={event => {
-                        setTxRepeatMonthly(event.target.checked);
-                        if (event.target.checked) {
-                          setTxTotalInstallments('1');
-                          setTxStartInstallment('1');
-                          setTxAmountMode('TOTAL');
-                        }
-                      }}
-                      className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
-                    />
-                    Repetir esta conta mensalmente
-                  </label>
-                  {txRepeatMonthly ? (
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Quantidade de meses</label>
-                      <input
-                        type="number"
-                        min="2"
-                        max="120"
-                        required
-                        value={txRecurrenceMonths}
-                        onChange={event => setTxRecurrenceMonths(event.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white"
-                      />
-                      <p className="mt-2 text-xs text-slate-400">
-                        Serão criadas {txRecurrenceMonths || 0} contas a pagar mensais, cada uma no valor de {formatCurrency(Number(txAmount) || 0)}.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Total de Parcelas</label><input type="number" min="1" max="48" value={txTotalInstallments} onChange={e => setTxTotalInstallments(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
-                      <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Iniciar da Parcela</label><input type="number" min="1" max="48" value={txStartInstallment} onChange={e => setTxStartInstallment(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
-                    </div>
-                  )}
-                </section>
+              {txType === 'EXPENSE' && !txRepeatMonthly && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Total de Parcelas</label><input type="number" min="1" max="48" value={txTotalInstallments} onChange={e => setTxTotalInstallments(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
+                  <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Iniciar da Parcela</label><input type="number" min="1" max="48" value={txStartInstallment} onChange={e => setTxStartInstallment(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
+                </div>
               )}
               {!txRepeatMonthly && Number(txTotalInstallments) > 1 && (
                 <fieldset className="rounded-xl border border-slate-800 bg-slate-950 p-3">
