@@ -34,10 +34,10 @@ export default function DashboardPage() {
   const [familyId, setFamilyId] = useState<string>('1');
 
   // Filtros do Dashboard Inicial (Visão Geral)
-  const [dashboardYear, setDashboardYear] = useState<number>(new Date().getFullYear());
+  const [dashboardYear, setDashboardYear] = useState<number | 'ALL'>(new Date().getFullYear());
+  const [dashboardMonth, setDashboardMonth] = useState<number | 'ALL'>('ALL');
   const [chartStatusMode, setChartStatusMode] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL');
   const [selectedChartMonth, setSelectedChartMonth] = useState<number>(new Date().getMonth() + 1);
-  const [commitmentMonth, setCommitmentMonth] = useState<number>(new Date().getMonth() + 1);
 
   // Filtros de Listagem
   const [filterMonth, setFilterMonth] = useState<number | 'ALL'>('ALL');
@@ -470,6 +470,8 @@ export default function DashboardPage() {
     return { year: y, month: m };
   };
 
+  const MONTH_SHORT_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const MONTH_FULL_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   const availableYears = Array.from(
     new Set([
       2024, 2025, 2026, 2027, 2028, 2029,
@@ -480,8 +482,20 @@ export default function DashboardPage() {
 
   const yearTransactions = transactions.filter(t => {
     const ym = getTxYearMonth(t);
-    return ym ? ym.year === dashboardYear : false;
+    if (!ym) return false;
+    if (dashboardYear !== 'ALL' && ym.year !== dashboardYear) return false;
+    if (dashboardMonth !== 'ALL' && ym.month !== dashboardMonth) return false;
+    return true;
   });
+  const dashboardPeriodLabel = `${dashboardMonth === 'ALL' ? 'Todos os meses' : MONTH_FULL_NAMES[dashboardMonth - 1]} • ${dashboardYear === 'ALL' ? 'Todos os anos' : dashboardYear}`;
+  const averageMonthsInPeriod = dashboardMonth !== 'ALL'
+    ? 1
+    : dashboardYear !== 'ALL'
+      ? 12
+      : Math.max(1, new Set(yearTransactions.map(t => {
+          const ym = getTxYearMonth(t);
+          return ym ? `${ym.year}-${ym.month}` : '';
+        }).filter(Boolean)).size);
 
   const yearIncomeTotal = yearTransactions
     .filter(t => t.type === 'INCOME')
@@ -512,9 +526,6 @@ export default function DashboardPage() {
   const yearCommitmentRate = yearIncomeTotal > 0 ? Math.min(100, (yearExpenseTotal / yearIncomeTotal) * 100) : 0;
   const yearIncomeReceivedRate = yearIncomeTotal > 0 ? Math.min(100, (yearIncomePaid / yearIncomeTotal) * 100) : 0;
   const yearExpensePaidRate = yearExpenseTotal > 0 ? Math.min(100, (yearExpensePaid / yearExpenseTotal) * 100) : 0;
-
-  const MONTH_SHORT_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  const MONTH_FULL_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
   let runningCumulativeBalance = 0;
   const monthlyChartData = MONTH_SHORT_NAMES.map((shortLabel, index) => {
@@ -572,12 +583,20 @@ export default function DashboardPage() {
     ...monthlyChartData.map(m => Math.abs(m.netBalance))
   );
 
+  const selectedMonthNumber = dashboardMonth === 'ALL' ? selectedChartMonth : dashboardMonth;
   const selectedMonthDetail =
-    monthlyChartData.find(m => m.monthNumber === selectedChartMonth) || monthlyChartData[new Date().getMonth()] || monthlyChartData[0];
-  const commitmentMonthDetail =
-    monthlyChartData.find(m => m.monthNumber === commitmentMonth) || monthlyChartData[0];
-  const monthlyCommitmentRate = commitmentMonthDetail.incomeTotal > 0
-    ? (commitmentMonthDetail.expenseTotal / commitmentMonthDetail.incomeTotal) * 100
+    monthlyChartData.find(m => m.monthNumber === selectedMonthNumber) || monthlyChartData[new Date().getMonth()] || monthlyChartData[0];
+  const visibleMonthlyChartData = dashboardMonth === 'ALL'
+    ? monthlyChartData
+    : monthlyChartData.filter(month => month.monthNumber === dashboardMonth);
+  const commitmentIncomeTotal = yearTransactions
+    .filter(t => t.type === 'INCOME')
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const commitmentExpenseTotal = yearTransactions
+    .filter(t => t.type === 'EXPENSE')
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const monthlyCommitmentRate = commitmentIncomeTotal > 0
+    ? (commitmentExpenseTotal / commitmentIncomeTotal) * 100
     : null;
   const commitmentLevel = monthlyCommitmentRate === null
     ? null
@@ -1082,7 +1101,7 @@ export default function DashboardPage() {
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold mb-1">
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Painel Inteligente • Exercício {dashboardYear}</span>
+                    <span>Painel Inteligente • {dashboardPeriodLabel}</span>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                     Olá, {userName}!
@@ -1131,13 +1150,31 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Filtro de Ano com navegação rápida */}
-                  <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-2xl p-1.5">
+                  <div className="flex flex-wrap items-center gap-1 bg-slate-950 border border-slate-800 rounded-2xl p-1.5">
+                    <select
+                      aria-label="Filtrar dashboard por mês"
+                      value={dashboardMonth}
+                      onChange={e => {
+                        const month = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                        setDashboardMonth(month);
+                        if (month !== 'ALL') setSelectedChartMonth(month);
+                      }}
+                      className="bg-transparent text-sm font-bold text-white outline-none cursor-pointer px-2 py-2"
+                    >
+                      <option value="ALL" className="bg-slate-900 text-white">Todos os meses</option>
+                      {MONTH_FULL_NAMES.map((month, index) => (
+                        <option key={month} value={index + 1} className="bg-slate-900 text-white">
+                          {month}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
-                      onClick={() => setDashboardYear(y => y - 1)}
+                      onClick={() => setDashboardYear(y => y === 'ALL' ? y : y - 1)}
                       title="Ano anterior"
                       aria-label="Ano anterior"
-                      className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                      disabled={dashboardYear === 'ALL'}
+                      className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -1146,9 +1183,10 @@ export default function DashboardPage() {
                       <select
                         aria-label="Filtrar dashboard por ano"
                         value={dashboardYear}
-                        onChange={e => setDashboardYear(Number(e.target.value))}
+                        onChange={e => setDashboardYear(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
                         className="bg-transparent text-sm font-extrabold text-white outline-none cursor-pointer pr-1"
                       >
+                        <option value="ALL" className="bg-slate-900 text-white">Todos os anos</option>
                         {availableYears.map(y => (
                           <option key={y} value={y} className="bg-slate-900 text-white">
                             Ano {y}
@@ -1158,10 +1196,11 @@ export default function DashboardPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setDashboardYear(y => y + 1)}
+                      onClick={() => setDashboardYear(y => y === 'ALL' ? y : y + 1)}
                       title="Próximo ano"
                       aria-label="Próximo ano"
-                      className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                      disabled={dashboardYear === 'ALL'}
+                      className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -1202,7 +1241,7 @@ export default function DashboardPage() {
                 <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20 border border-slate-800/90 hover:border-emerald-500/30 p-6 rounded-3xl shadow-xl relative overflow-hidden transition-all group">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-xs uppercase font-extrabold tracking-wider text-slate-400">
-                      Total a Receber ({dashboardYear})
+                      Total a Receber ({dashboardPeriodLabel})
                     </span>
                     <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-105 transition-transform">
                       <TrendingUp className="w-5 h-5" />
@@ -1233,7 +1272,7 @@ export default function DashboardPage() {
                 <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-rose-950/20 border border-slate-800/90 hover:border-rose-500/30 p-6 rounded-3xl shadow-xl relative overflow-hidden transition-all group">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-xs uppercase font-extrabold tracking-wider text-slate-400">
-                      Total a Pagar ({dashboardYear})
+                      Total a Pagar ({dashboardPeriodLabel})
                     </span>
                     <div className="w-11 h-11 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-105 transition-transform">
                       <TrendingDown className="w-5 h-5" />
@@ -1306,23 +1345,13 @@ export default function DashboardPage() {
                   <div>
                     <h2 className="text-lg sm:text-xl font-extrabold text-white">Comprometimento financeiro</h2>
                     <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                      Percentual da receita prevista comprometido com contas a pagar no mês.
+                      Percentual da receita prevista comprometido com contas a pagar no período selecionado.
                     </p>
                   </div>
-                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                  <span className="flex items-center gap-2 text-xs font-semibold text-slate-400">
                     <Calendar className="w-4 h-4 text-emerald-400" />
-                    <span className="sr-only">Mês do score</span>
-                    <select
-                      aria-label="Selecionar mês do comprometimento financeiro"
-                      value={commitmentMonth}
-                      onChange={e => setCommitmentMonth(Number(e.target.value))}
-                      className="bg-slate-950 border border-slate-800 text-white rounded-xl px-3 py-2 outline-none focus:border-emerald-500"
-                    >
-                      {MONTH_FULL_NAMES.map((month, index) => (
-                        <option key={month} value={index + 1}>{month} {dashboardYear}</option>
-                      ))}
-                    </select>
-                  </label>
+                    {dashboardPeriodLabel}
+                  </span>
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
@@ -1332,8 +1361,8 @@ export default function DashboardPage() {
                       className="w-full max-w-sm"
                       role="img"
                       aria-label={monthlyCommitmentRate === null
-                        ? `Sem receita prevista para calcular o comprometimento em ${commitmentMonthDetail.fullName}`
-                        : `Comprometimento financeiro de ${monthlyCommitmentRate.toFixed(1)} por cento em ${commitmentMonthDetail.fullName}`}
+                        ? `Sem receita prevista para calcular o comprometimento em ${dashboardPeriodLabel}`
+                        : `Comprometimento financeiro de ${monthlyCommitmentRate.toFixed(1)} por cento em ${dashboardPeriodLabel}`}
                     >
                       <defs>
                         <linearGradient id="commitment-gauge-gradient" x1="30" y1="0" x2="230" y2="0" gradientUnits="userSpaceOnUse">
@@ -1371,7 +1400,7 @@ export default function DashboardPage() {
                     </svg>
                     {monthlyCommitmentRate === null ? (
                       <p className="text-sm font-bold text-amber-300 text-center -mt-1">
-                        {commitmentMonthDetail.expenseTotal > 0
+                        {commitmentExpenseTotal > 0
                           ? 'Sem receita prevista para calcular'
                           : 'Sem movimentações previstas'}
                       </p>
@@ -1392,17 +1421,17 @@ export default function DashboardPage() {
                     <div className="rounded-2xl bg-slate-950/70 border border-emerald-500/15 p-4">
                       <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Previsto a receber</p>
                       <p className="text-xl font-black text-emerald-400 mt-2">
-                        {formatCurrency(commitmentMonthDetail.incomeTotal)}
+                        {formatCurrency(commitmentIncomeTotal)}
                       </p>
                     </div>
                     <div className="rounded-2xl bg-slate-950/70 border border-rose-500/15 p-4">
                       <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Previsto a pagar</p>
                       <p className="text-xl font-black text-rose-400 mt-2">
-                        {formatCurrency(commitmentMonthDetail.expenseTotal)}
+                        {formatCurrency(commitmentExpenseTotal)}
                       </p>
                     </div>
                     <p className="sm:col-span-2 text-xs leading-relaxed text-slate-500">
-                      Calculado sobre os totais previstos do mês, incluindo lançamentos pagos e pendentes. As faixas são indicativas: baixo até 30%, moderado até 50%, elevado até 70% e muito alto acima de 70%.
+                      Calculado sobre os totais previstos no período, incluindo lançamentos pagos e pendentes. As faixas são indicativas: baixo até 30%, moderado até 50%, elevado até 70% e muito alto acima de 70%.
                     </p>
                   </div>
                 </div>
@@ -1418,10 +1447,10 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <h2 className="text-lg sm:text-xl font-extrabold text-white">
-                          Total a Receber vs Total a Pagar — Mês a Mês ({dashboardYear})
+                          Total a Receber vs Total a Pagar — Mês a Mês ({dashboardPeriodLabel})
                         </h2>
                         <p className="text-xs text-slate-400">
-                          Comparativo mensal de entradas e saídas ao longo do ano selecionado. Clique em um mês para inspecionar.
+                          Comparativo de entradas e saídas no período selecionado. Clique em um mês para inspecionar.
                         </p>
                       </div>
                     </div>
@@ -1443,9 +1472,10 @@ export default function DashboardPage() {
                     <select
                       aria-label="Selecionar ano do gráfico mensal"
                       value={dashboardYear}
-                      onChange={e => setDashboardYear(Number(e.target.value))}
+                      onChange={e => setDashboardYear(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
                       className="bg-slate-950 border border-slate-800 text-slate-200 text-xs font-bold rounded-xl px-3.5 py-2 outline-none focus:border-emerald-500 transition-colors cursor-pointer"
                     >
+                      <option value="ALL">Todos os anos</option>
                       {availableYears.map(y => (
                         <option key={y} value={y}>
                           Ano: {y}
@@ -1474,7 +1504,7 @@ export default function DashboardPage() {
 
                       {/* Barras Mês a Mês */}
                       <div className="relative z-10 flex-1 flex items-end justify-between gap-1.5 sm:gap-3 pl-16 pr-1 pt-4 pb-1">
-                        {monthlyChartData.map(m => {
+                        {visibleMonthlyChartData.map(m => {
                           const incomeHeightPercent =
                             m.displayIncome > 0
                               ? Math.max(4, Math.round((m.displayIncome / maxMonthlyChartValue) * 100))
@@ -1483,7 +1513,7 @@ export default function DashboardPage() {
                             m.displayExpense > 0
                               ? Math.max(4, Math.round((m.displayExpense / maxMonthlyChartValue) * 100))
                               : 0;
-                          const isSelected = selectedChartMonth === m.monthNumber;
+                          const isSelected = selectedMonthNumber === m.monthNumber;
 
                           return (
                             <div
@@ -1497,7 +1527,7 @@ export default function DashboardPage() {
                                   setSelectedChartMonth(m.monthNumber);
                                 }
                               }}
-                              aria-label={`${m.fullName} de ${dashboardYear}: A receber ${formatCurrency(m.displayIncome)}, A pagar ${formatCurrency(m.displayExpense)}`}
+                              aria-label={`${m.fullName} de ${dashboardYear === 'ALL' ? 'todos os anos' : dashboardYear}: A receber ${formatCurrency(m.displayIncome)}, A pagar ${formatCurrency(m.displayExpense)}`}
                               className={`group flex-1 h-full flex flex-col justify-end items-center cursor-pointer rounded-xl px-1 py-1 transition-all ${
                                 isSelected
                                   ? 'bg-slate-800/60 ring-1 ring-emerald-500/40'
@@ -1540,8 +1570,8 @@ export default function DashboardPage() {
 
                     {/* Rótulos dos Meses (Eixo X) + Indicador de Saldo do Mês */}
                     <div className="flex items-center justify-between gap-1.5 sm:gap-3 pl-16 pr-1 pt-2 border-t border-slate-800/80">
-                      {monthlyChartData.map(m => {
-                        const isSelected = selectedChartMonth === m.monthNumber;
+                      {visibleMonthlyChartData.map(m => {
+                        const isSelected = selectedMonthNumber === m.monthNumber;
                         const hasActivity = m.displayIncome > 0 || m.displayExpense > 0;
                         return (
                           <button
@@ -1573,7 +1603,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
-                          {selectedMonthDetail.fullName} / {dashboardYear}
+                          {selectedMonthDetail.fullName} / {dashboardYear === 'ALL' ? 'Todos os anos' : dashboardYear}
                         </span>
                         <span className="text-xs text-slate-400 font-semibold">
                           {selectedMonthDetail.txCount} lançamento(s)
@@ -1646,7 +1676,7 @@ export default function DashboardPage() {
                         type="button"
                         onClick={() => {
                           setFilterYear(dashboardYear);
-                          setFilterMonth(selectedMonthDetail.monthNumber);
+                          setFilterMonth(dashboardMonth === 'ALL' ? selectedMonthDetail.monthNumber : dashboardMonth);
                           setFilterStatus('ALL');
                           setActiveModule('pagar');
                           setActiveSubMenu('contas_pagar');
@@ -1659,7 +1689,7 @@ export default function DashboardPage() {
                         type="button"
                         onClick={() => {
                           setFilterYear(dashboardYear);
-                          setFilterMonth(selectedMonthDetail.monthNumber);
+                          setFilterMonth(dashboardMonth === 'ALL' ? selectedMonthDetail.monthNumber : dashboardMonth);
                           setFilterStatus('ALL');
                           setActiveModule('receber');
                           setActiveSubMenu('contas_receber');
@@ -1677,23 +1707,23 @@ export default function DashboardPage() {
                   <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
                     <p className="text-[11px] text-slate-400 font-semibold">Média Mensal a Receber</p>
                     <p className="text-base font-extrabold text-emerald-400 mt-0.5">
-                      {formatCurrency(yearIncomeTotal / 12)}
+                      {formatCurrency(yearIncomeTotal / averageMonthsInPeriod)}
                     </p>
                   </div>
                   <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
                     <p className="text-[11px] text-slate-400 font-semibold">Média Mensal a Pagar</p>
                     <p className="text-base font-extrabold text-rose-400 mt-0.5">
-                      {formatCurrency(yearExpenseTotal / 12)}
+                      {formatCurrency(yearExpenseTotal / averageMonthsInPeriod)}
                     </p>
                   </div>
                   <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
-                    <p className="text-[11px] text-slate-400 font-semibold">Resultado Realizado ({dashboardYear})</p>
+                    <p className="text-[11px] text-slate-400 font-semibold">Resultado Realizado ({dashboardPeriodLabel})</p>
                     <p className={`text-base font-extrabold mt-0.5 ${yearNetRealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {formatCurrency(yearNetRealized)}
                     </p>
                   </div>
                   <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
-                    <p className="text-[11px] text-slate-400 font-semibold">Contas em Atraso ({dashboardYear})</p>
+                    <p className="text-[11px] text-slate-400 font-semibold">Contas em Atraso ({dashboardPeriodLabel})</p>
                     <p className={`text-base font-extrabold mt-0.5 ${yearOverdueTransactions.length > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
                       {yearOverdueTransactions.length} ({formatCurrency(yearExpenseOverdue)})
                     </p>
@@ -1709,7 +1739,7 @@ export default function DashboardPage() {
                     <div>
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-sky-400" />
-                        Resultado Líquido Mês a Mês ({dashboardYear})
+                        Resultado Líquido por Mês ({dashboardPeriodLabel})
                       </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
                         Diferença mensal entre Total a Receber e Total a Pagar (Superávit / Défice)
@@ -1722,7 +1752,7 @@ export default function DashboardPage() {
                       {/* Linha Zero Central */}
                       <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-slate-700 pointer-events-none" />
 
-                      {monthlyChartData.map(m => {
+                      {visibleMonthlyChartData.map(m => {
                         const ratio = Math.min(100, Math.round((Math.abs(m.netBalance) / maxAbsMonthlyNet) * 100));
                         const barHeight = m.netBalance === 0 ? 4 : Math.max(8, Math.round(ratio / 2));
                         const isPositive = m.netBalance >= 0;
@@ -1756,7 +1786,7 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex items-center justify-between gap-1.5 sm:gap-2 px-1 pt-2 border-t border-slate-800/80">
-                      {monthlyChartData.map(m => (
+                      {visibleMonthlyChartData.map(m => (
                         <span key={m.monthNumber} className="flex-1 text-center text-[10px] font-bold text-slate-400">
                           {m.shortLabel}
                         </span>
@@ -1767,11 +1797,11 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
                     <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
-                      Meses positivos: <strong className="text-white">{monthlyChartData.filter(m => m.netBalance > 0).length}</strong>
+                      Meses positivos: <strong className="text-white">{visibleMonthlyChartData.filter(m => m.netBalance > 0).length}</strong>
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block" />
-                      Meses negativos: <strong className="text-white">{monthlyChartData.filter(m => m.netBalance < 0).length}</strong>
+                      Meses negativos: <strong className="text-white">{visibleMonthlyChartData.filter(m => m.netBalance < 0).length}</strong>
                     </span>
                   </div>
                 </div>
@@ -1782,10 +1812,10 @@ export default function DashboardPage() {
                     <div>
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <PieIcon className="w-5 h-5 text-emerald-400" />
-                        Maiores Despesas por Categoria ({dashboardYear})
+                        Maiores Despesas por Categoria ({dashboardPeriodLabel})
                       </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        Para onde está indo o orçamento da família neste ano
+                        Para onde está indo o orçamento da família no período
                       </p>
                     </div>
                   </div>
@@ -1857,7 +1887,7 @@ export default function DashboardPage() {
                     </div>
                   ) : (
                     <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-8 text-center">
-                      <p className="text-slate-400 text-sm">Nenhuma despesa registada em {dashboardYear}.</p>
+                      <p className="text-slate-400 text-sm">Nenhuma despesa registada em {dashboardPeriodLabel}.</p>
                     </div>
                   )}
                 </div>
@@ -1869,7 +1899,7 @@ export default function DashboardPage() {
                   <div>
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       <Clock className="w-5 h-5 text-amber-400" />
-                      Próximos Vencimentos & Contas em Aberto ({dashboardYear})
+                      Próximos Vencimentos & Contas em Aberto ({dashboardPeriodLabel})
                     </h3>
                     <p className="text-xs text-slate-400">
                       Compromissos pendentes ordenados por data de vencimento
@@ -1879,7 +1909,7 @@ export default function DashboardPage() {
                     type="button"
                     onClick={() => {
                       setFilterYear(dashboardYear);
-                      setFilterMonth('ALL');
+                      setFilterMonth(dashboardMonth);
                       setFilterStatus('PENDING');
                       setActiveModule('pagar');
                       setActiveSubMenu('contas_pagar');
@@ -1947,7 +1977,7 @@ export default function DashboardPage() {
                 ) : (
                   <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-6 text-center">
                     <p className="text-slate-400 text-sm">
-                      Nenhuma conta pendente para o ano de {dashboardYear}. Tudo em dia! 🎉
+                      Nenhuma conta pendente em {dashboardPeriodLabel}. Tudo em dia! 🎉
                     </p>
                   </div>
                 )}
