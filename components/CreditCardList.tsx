@@ -8,7 +8,9 @@ import {
   X, 
   Receipt,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { getCurrentCardBillingPeriod, type CardBillingPeriod } from '@/lib/creditCardBilling';
 
@@ -56,6 +58,15 @@ export default function CreditCardList({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingCard, setEditingCard] = useState<CardItem | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editBrand, setEditBrand] = useState('');
+  const [editLimit, setEditLimit] = useState('');
+  const [editClosingDay, setEditClosingDay] = useState(1);
+  const [editDueDay, setEditDueDay] = useState(10);
+  const [savingCard, setSavingCard] = useState(false);
+  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
+  const [cardActionError, setCardActionError] = useState('');
 
   // Modal de Fatura
   const [selectedCard, setSelectedCard] = useState<CardItem | null>(null);
@@ -109,6 +120,85 @@ export default function CreditCardList({
     const [y, m, d] = dateStr.split('T')[0].split('-');
     return `${d}/${m}/${y}`;
   };
+
+  const getPendingTransactionCount = (cardId: string) => transactions.filter((transaction) =>
+    String(transaction.credit_card_id) === String(cardId) && transaction.status !== 'PAID'
+  ).length;
+
+  function handleOpenEditCard(card: CardItem) {
+    setEditingCard(card);
+    setEditName(card.name);
+    setEditBrand(card.brand);
+    setEditLimit(Number(card.total_limit).toLocaleString('pt-BR', {
+      useGrouping: false,
+      minimumFractionDigits: 2
+    }));
+    setEditClosingDay(Number(card.closing_day));
+    setEditDueDay(Number(card.due_day));
+    setCardActionError('');
+  }
+
+  async function handleUpdateCard(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingCard) return;
+
+    const numericLimit = Number(editLimit.replace(/\./g, '').replace(',', '.'));
+    if (!Number.isFinite(numericLimit) || numericLimit <= 0) {
+      setCardActionError('Informe um valor de limite válido.');
+      return;
+    }
+
+    const hasPendingTransactions = getPendingTransactionCount(editingCard.id) > 0;
+    const payload = hasPendingTransactions
+      ? { total_limit: numericLimit }
+      : {
+          name: editName.trim(),
+          brand: editBrand,
+          total_limit: numericLimit,
+          closing_day: Number(editClosingDay),
+          due_day: Number(editDueDay)
+        };
+
+    setSavingCard(true);
+    setCardActionError('');
+    try {
+      const res = await fetch(`${apiUrl}/api/credit-cards/${editingCard.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao atualizar o cartão.');
+
+      setEditingCard(null);
+      await loadData();
+      if (onInvoicePaid) await onInvoicePaid();
+    } catch (err: any) {
+      setCardActionError(err.message || 'Erro ao atualizar o cartão.');
+    } finally {
+      setSavingCard(false);
+    }
+  }
+
+  async function handleDeleteCard(card: CardItem) {
+    if (getPendingTransactionCount(card.id) > 0) return;
+    if (!confirm(`Deseja realmente excluir o cartão "${card.name}"?`)) return;
+
+    setDeletingCardId(card.id);
+    setCardActionError('');
+    try {
+      const res = await fetch(`${apiUrl}/api/credit-cards/${card.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao excluir o cartão.');
+
+      await loadData();
+      if (onInvoicePaid) await onInvoicePaid();
+    } catch (err: any) {
+      setCardActionError(err.message || 'Erro ao excluir o cartão.');
+    } finally {
+      setDeletingCardId(null);
+    }
+  }
 
   function handleOpenInvoice(card: CardItem) {
     const period = getCurrentCardBillingPeriod(card.closing_day, card.due_day);
@@ -206,9 +296,32 @@ export default function CreditCardList({
                     <h3 className="text-sm font-bold text-white">{card.name}</h3>
                     <span className="text-[11px] text-indigo-400 font-semibold">{card.brand}</span>
                   </div>
-                  <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">
-                    Vence dia {card.due_day}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">
+                      Vence dia {card.due_day}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditCard(card)}
+                      title="Editar cartão"
+                      aria-label={`Editar cartão ${card.name}`}
+                      className="p-1.5 text-slate-400 hover:text-indigo-300 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    {getPendingTransactionCount(card.id) === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCard(card)}
+                        disabled={deletingCardId === card.id}
+                        title="Excluir cartão"
+                        aria-label={`Excluir cartão ${card.name}`}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-slate-800/60 space-y-1.5 text-xs">
@@ -220,6 +333,11 @@ export default function CreditCardList({
                     <span>Fecho da Fatura:</span>
                     <span className="text-slate-300">Dia {card.closing_day}</span>
                   </div>
+                  {getPendingTransactionCount(card.id) > 0 && (
+                    <p className="mt-2 text-[11px] text-amber-400">
+                      Há lançamentos pendentes vinculados. Apenas o limite pode ser alterado; este cartão não pode ser excluído.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -381,6 +499,126 @@ export default function CreditCardList({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {cardActionError && !editingCard && (
+        <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-400 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{cardActionError}</span>
+        </div>
+      )}
+
+      {editingCard && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={handleUpdateCard}
+            className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white">Editar cartão</h3>
+              <button
+                type="button"
+                onClick={() => setEditingCard(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+                aria-label="Fechar edição"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {getPendingTransactionCount(editingCard.id) > 0 && (
+              <p className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300">
+                Este cartão possui lançamentos pendentes. Somente o limite pode ser alterado.
+              </p>
+            )}
+
+            <fieldset disabled={getPendingTransactionCount(editingCard.id) > 0} className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-400 mb-1">Identificação do Cartão</label>
+                <input
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-400 mb-1">Bandeira</label>
+                <select
+                  value={editBrand}
+                  onChange={(e) => setEditBrand(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                >
+                  <option value="Mastercard">Mastercard</option>
+                  <option value="Visa">Visa</option>
+                  <option value="Elo">Elo</option>
+                  <option value="American Express">American Express</option>
+                  <option value="Hipercard">Hipercard</option>
+                  <option value="Outra">Outra</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Limite Total (R$)</label>
+                <input
+                  required
+                  value={editLimit}
+                  onChange={(e) => setEditLimit(e.target.value)}
+                  placeholder="Ex: 15000,00"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Dia Fecho</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  required
+                  value={editClosingDay}
+                  onChange={(e) => setEditClosingDay(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Dia Vencimento</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  required
+                  value={editDueDay}
+                  onChange={(e) => setEditDueDay(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                />
+              </div>
+            </fieldset>
+
+            {cardActionError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-400 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{cardActionError}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingCard(null)}
+                disabled={savingCard}
+                className="px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white rounded-xl cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingCard}
+                className="px-4 py-2 text-xs font-bold bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl cursor-pointer"
+              >
+                {savingCard ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
