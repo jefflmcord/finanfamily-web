@@ -224,6 +224,11 @@ export default function DashboardPage() {
     try {
       const accessRes = await authenticatedFetch(`${API_URL}/api/family/access`);
       const accessData = await accessRes.json();
+      if (accessData.code === 'TENANT_BLOCKED') {
+        sessionStorage.setItem('@FinanFamily:blockedContactPhone', accessData.contact_phone || '(41) 0000-0000');
+        router.replace('/acesso-indisponivel');
+        return;
+      }
       if (!accessRes.ok) throw new Error(accessData.error || 'Não foi possível validar suas permissões.');
       setFamilyAccess(accessData);
       setFamilyId(String(accessData.familyId));
@@ -294,6 +299,33 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    let checkingAvailability = false;
+    const checkTenantAvailability = async () => {
+      if (checkingAvailability || !localStorage.getItem('@FinanFamily:token')) return;
+      checkingAvailability = true;
+      try {
+        const response = await authenticatedFetch(`${API_URL}/api/family/access`);
+        const result = await response.json();
+        if (result.code === 'TENANT_BLOCKED') {
+          sessionStorage.setItem('@FinanFamily:blockedContactPhone', result.contact_phone || '(41) 0000-0000');
+          router.replace('/acesso-indisponivel');
+        }
+      } catch (availabilityError) {
+        console.error('Não foi possível verificar a disponibilidade do tenant:', availabilityError);
+      } finally {
+        checkingAvailability = false;
+      }
+    };
+
+    const intervalId = window.setInterval(checkTenantAvailability, 30_000);
+    window.addEventListener('focus', checkTenantAvailability);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', checkTenantAvailability);
+    };
+  }, [router]);
 
   const saveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

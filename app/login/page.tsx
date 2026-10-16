@@ -30,8 +30,14 @@ export default function LoginPage() {
       });
       const data = await res.json();
 
+      if (data.code === 'TENANT_BLOCKED') {
+        sessionStorage.setItem('@FinanFamily:blockedContactPhone', data.contact_phone || '(41) 0000-0000');
+        router.replace('/acesso-indisponivel');
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Erro ao autenticar com o Google.');
 
+      sessionStorage.removeItem('@FinanFamily:blockedContactPhone');
       localStorage.setItem('@FinanFamily:token', data.token);
       localStorage.setItem('@FinanFamily:user', JSON.stringify(data.user));
       router.push('/dashboard');
@@ -85,9 +91,13 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok) {
+        sessionStorage.removeItem('@FinanFamily:blockedContactPhone');
         localStorage.setItem('@FinanFamily:token', data.token);
         localStorage.setItem('@FinanFamily:user', JSON.stringify(data.user));
         router.push('/dashboard');
+      } else if (data.code === 'TENANT_BLOCKED') {
+        sessionStorage.setItem('@FinanFamily:blockedContactPhone', data.contact_phone || '(41) 0000-0000');
+        router.replace('/acesso-indisponivel');
       } else {
         setError(data.error || 'E-mail ou palavra-passe incorretos.');
       }
