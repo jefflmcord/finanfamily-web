@@ -176,17 +176,25 @@ export default function DashboardPage() {
   // EDITAR TRANSAÇÃO
   const openEditModal = (tx: any) => {
     setEditingTx(tx);
+    setTxType(tx.type === 'INCOME' ? 'INCOME' : 'EXPENSE');
     setTxDescription(tx.description);
     setTxAmount(tx.amount.toString());
     setTxDueDate(tx.due_date ? tx.due_date.split('T')[0] : '');
     setTxCategoryId(tx.category_id || '');
     setTxAccountId(tx.account_id || '');
+    setTxPaymentMethod(tx.payment_method || 'BOLETO');
+    setError('');
     setIsEditModalOpen(true);
   };
 
   const handleUpdateTx = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTx) return;
+    const matchingCategories = categories.filter(category => category.flow_type === editingTx.type);
+    if (matchingCategories.length > 0 && !matchingCategories.some(category => String(category.id) === String(txCategoryId))) {
+      setError('Selecione uma categoria válida para este lançamento.');
+      return;
+    }
 
     try {
       const payload = {
@@ -279,6 +287,11 @@ export default function DashboardPage() {
   const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!txDescription || !txAmount) return;
+    const matchingCategories = categories.filter(category => category.flow_type === txType);
+    if (matchingCategories.length > 0 && !matchingCategories.some(category => String(category.id) === String(txCategoryId))) {
+      setError('Selecione uma categoria para este lançamento.');
+      return;
+    }
 
     let resolvedFamilyId = familyId;
     const userStr = localStorage.getItem('@FinanFamily:user');
@@ -326,6 +339,7 @@ export default function DashboardPage() {
         setIsTxModalOpen(false);
         setTxDescription('');
         setTxAmount('');
+        setTxCategoryId('');
         setTxTotalInstallments('1');
         setTxStartInstallment('1');
         await fetchData();
@@ -2039,6 +2053,20 @@ export default function DashboardPage() {
             <h3 className="text-2xl font-extrabold text-white mb-6 flex items-center gap-2"><Edit className="w-6 h-6 text-emerald-400" /> Editar Lançamento</h3>
             <form onSubmit={handleUpdateTx} className="space-y-4">
               <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Descrição</label><input type="text" required value={txDescription} onChange={e => setTxDescription(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Categoria</label>
+                <select
+                  required={categories.some(category => category.flow_type === editingTx.type)}
+                  value={txCategoryId}
+                  onChange={e => setTxCategoryId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"
+                >
+                  <option value="">Selecione uma categoria...</option>
+                  {categories
+                    .filter(category => category.flow_type === editingTx.type)
+                    .map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Valor (R$)</label><input type="number" step="0.01" required value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Vencimento</label><input type="date" required value={txDueDate} onChange={e => setTxDueDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
@@ -2078,10 +2106,24 @@ export default function DashboardPage() {
             <h3 className="text-2xl font-extrabold text-white mb-6">Novo Lançamento</h3>
             <form onSubmit={handleSaveTransaction} className="space-y-4">
               <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-                <button type="button" onClick={() => setTxType('EXPENSE')} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'EXPENSE' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}>Contas a Pagar</button>
-                <button type="button" onClick={() => setTxType('INCOME')} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber</button>
+                <button type="button" onClick={() => { setTxType('EXPENSE'); setTxCategoryId(''); }} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'EXPENSE' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}>Contas a Pagar</button>
+                <button type="button" onClick={() => { setTxType('INCOME'); setTxCategoryId(''); }} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber</button>
               </div>
               <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Descrição</label><input type="text" required placeholder="Ex: Aluguel, Supermercado..." value={txDescription} onChange={e => setTxDescription(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Categoria</label>
+                <select
+                  required={categories.some(category => category.flow_type === txType)}
+                  value={txCategoryId}
+                  onChange={e => setTxCategoryId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"
+                >
+                  <option value="">Selecione uma categoria...</option>
+                  {categories
+                    .filter(category => category.flow_type === txType)
+                    .map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Valor Total (R$)</label><input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div>
