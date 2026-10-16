@@ -4,8 +4,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Wallet, Loader2, PlusCircle, CreditCard, Target, LayoutDashboard, LogOut, X, 
-  CheckCircle2, FileText, DollarSign, Layers, Sparkles, PieChart as PieIcon, 
-  BarChart3, Trophy, Edit, Trash2, AlertTriangle
+  CheckCircle2, FileText, DollarSign, Layers, PieChart as PieIcon, 
+  BarChart3, Trophy, Edit, Trash2, AlertTriangle, Calendar, Filter, Circle, CheckCircle, AlertCircle
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -24,6 +24,11 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [userName, setUserName] = useState('Família');
   const [familyId, setFamilyId] = useState<string>('1');
+
+  // Filtros de Listagem
+  const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear] = useState<number>(new Date().getFullYear());
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'PENDING' | 'PAID' | 'OVERDUE'>('ALL');
 
   // Modal Novo Lançamento
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -118,6 +123,14 @@ export default function DashboardPage() {
     return `${day}/${month}/${year}`;
   };
 
+  const getTransactionStatus = (t: any) => {
+    if (t.status === 'PAID') return 'PAID';
+    const today = new Date().toISOString().split('T')[0];
+    const dueDate = t.due_date ? t.due_date.split('T')[0] : '';
+    if (dueDate && dueDate < today) return 'OVERDUE';
+    return 'PENDING';
+  };
+
   // APAGAR TRANSAÇÃO
   const handleDeleteTx = async () => {
     if (!txToDelete) return;
@@ -186,6 +199,34 @@ export default function DashboardPage() {
       }
     } catch (e) {
       setError('Erro de conexão.');
+    }
+  };
+
+  // MARCAR COMO PAGO / PENDENTE RÁPIDO
+  const handleToggleStatus = async (tx: any) => {
+    const newStatus = tx.status === 'PAID' ? 'PENDING' : 'PAID';
+    try {
+      const payload = {
+        description: tx.description,
+        amount: tx.amount,
+        due_date: tx.due_date ? tx.due_date.split('T')[0] : '',
+        category_id: tx.category_id || null,
+        account_id: tx.account_id || null,
+        payment_method: tx.payment_method || 'BOLETO',
+        status: newStatus
+      };
+
+      const res = await fetch(`https://finanfamily-api.onrender.com/api/transactions/${tx.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        await fetchData();
+      }
+    } catch (e) {
+      setError('Erro ao atualizar status.');
     }
   };
 
@@ -365,24 +406,97 @@ export default function DashboardPage() {
 
   const goalTransactions = transactions.filter(t => t.description.startsWith('Objetivo:'));
 
-  const renderTransactionRow = (t: any, isIncome: boolean) => (
-    <div key={t.id} className="py-4 flex justify-between items-center group">
-      <div>
-        <p className="font-bold text-white">{t.description}</p>
-        <p className="text-xs text-slate-400">
-          Vencimento: {formatDatePT(t.due_date)} {t.total_installments > 1 ? `(${t.installment_number}/${t.total_installments})` : ''} • Categoria: {t.category_name || 'Geral'}
-        </p>
-      </div>
-      <div className="flex items-center gap-4">
-        <span className={`${isIncome ? 'text-emerald-400' : 'text-rose-400'} font-bold text-right`}>{formatCurrency(t.amount)}</span>
-        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => openEditModal(t)} className="p-1.5 bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors">
-            <Edit className="w-4 h-4" />
+  // Lógica de Filtro para Transações Modernas
+  const filteredTransactions = (type: 'EXPENSE' | 'INCOME') => {
+    return transactions.filter(t => {
+      if (t.type !== type) return false;
+
+      // Filtro de Mês/Ano
+      if (t.due_date) {
+        const [year, month] = t.due_date.split('-');
+        if (Number(year) !== filterYear || Number(month) !== filterMonth) return false;
+      }
+
+      // Filtro de Status
+      if (filterStatus !== 'ALL') {
+        const currentStatus = getTransactionStatus(t);
+        if (filterStatus !== currentStatus) return false;
+      }
+
+      return true;
+    }).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+  };
+
+  const renderModernTransactionRow = (t: any, isIncome: boolean) => {
+    const status = getTransactionStatus(t);
+    const isPaid = status === 'PAID';
+    const isOverdue = status === 'OVERDUE';
+
+    return (
+      <div key={t.id} className={`p-5 rounded-2xl border transition-all flex justify-between items-center group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => handleToggleStatus(t)}
+            className={`flex-shrink-0 transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
+          >
+            {isPaid ? <CheckCircle className="w-7 h-7" /> : isOverdue ? <AlertCircle className="w-7 h-7" /> : <Circle className="w-7 h-7" />}
           </button>
-          <button onClick={() => openDeleteModal(t)} className="p-1.5 bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors">
-            <Trash2 className="w-4 h-4" />
-          </button>
+          
+          <div>
+            <p className={`font-bold text-base ${isPaid ? 'text-slate-400 line-through' : 'text-white'}`}>{t.description}</p>
+            <div className="flex items-center gap-2 mt-1 text-xs font-medium">
+              <span className={`px-2 py-0.5 rounded-md ${isPaid ? 'bg-slate-800 text-slate-400' : isOverdue ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-300'}`}>
+                <Calendar className="w-3 h-3 inline mr-1 -mt-0.5" />
+                {formatDatePT(t.due_date)}
+              </span>
+              <span className="text-slate-500">•</span>
+              <span className="text-slate-400">{t.category_name || 'Categoria Geral'}</span>
+              {t.total_installments > 1 && (
+                <>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md">
+                    Parcela {t.installment_number}/{t.total_installments}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
+
+        <div className="flex items-center gap-6">
+          <span className={`text-lg font-black ${isPaid ? 'text-slate-500' : isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {formatCurrency(t.amount)}
+          </span>
+          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => openEditModal(t)} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm"><Edit className="w-4 h-4" /></button>
+            <button onClick={() => openDeleteModal(t)} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFilterBar = () => (
+    <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl shadow-lg flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="flex items-center gap-2 text-slate-300 font-bold">
+        <Filter className="w-5 h-5 text-emerald-400" /> Filtros
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2 outline-none focus:border-emerald-500 transition-colors">
+          <option value={1}>Janeiro</option><option value={2}>Fevereiro</option><option value={3}>Março</option>
+          <option value={4}>Abril</option><option value={5}>Maio</option><option value={6}>Junho</option>
+          <option value={7}>Julho</option><option value={8}>Agosto</option><option value={9}>Setembro</option>
+          <option value={10}>Outubro</option><option value={11}>Novembro</option><option value={12}>Dezembro</option>
+        </select>
+        <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2 outline-none focus:border-emerald-500 transition-colors">
+          {[2024, 2025, 2026, 2027, 2028, 2029].map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl px-4 py-2 outline-none focus:border-emerald-500 transition-colors">
+          <option value="ALL">Todos os Status</option>
+          <option value="PENDING">A Pagar / Pendente</option>
+          <option value="OVERDUE">Atrasados</option>
+          <option value="PAID">Pagos</option>
+        </select>
       </div>
     </div>
   );
@@ -498,34 +612,60 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* NOVO LAYOUT MODERNIZADO: CONTAS A PAGAR */}
           {activeModule === 'pagar' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
-                <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm">+ Adicionar</button>
+                <div>
+                  <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
+                  <p className="text-slate-400 text-sm mt-1">Controle e organize as suas despesas.</p>
+                </div>
+                <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2">
+                  <PlusCircle className="w-4 h-4" /> Adicionar
+                </button>
               </div>
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-                {transactions.filter(t => t.type === 'EXPENSE').length > 0 ? (
-                  <div className="divide-y divide-slate-800">
-                    {transactions.filter(t => t.type === 'EXPENSE').map(t => renderTransactionRow(t, false))}
+
+              {renderFilterBar()}
+
+              <div className="space-y-3">
+                {filteredTransactions('EXPENSE').length > 0 ? (
+                  filteredTransactions('EXPENSE').map(t => renderModernTransactionRow(t, false))
+                ) : (
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
+                    <CheckCircle2 className="w-12 h-12 text-slate-600 mx-auto" />
+                    <p className="text-white font-bold text-lg">Tudo limpo por aqui!</p>
+                    <p className="text-slate-400 text-sm">Nenhuma conta encontrada para estes filtros.</p>
                   </div>
-                ) : <p className="text-slate-400 text-sm py-4">Nenhuma conta a pagar registada.</p>}
+                )}
               </div>
             </div>
           )}
 
+          {/* NOVO LAYOUT MODERNIZADO: CONTAS A RECEBER */}
           {activeModule === 'receber' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-extrabold text-white">Contas a Receber</h2>
-                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm">+ Adicionar</button>
+                <div>
+                  <h2 className="text-2xl font-extrabold text-white">Contas a Receber</h2>
+                  <p className="text-slate-400 text-sm mt-1">Monitorize as suas entradas e receitas previstas.</p>
+                </div>
+                <button onClick={() => { setTxType('INCOME'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2">
+                  <PlusCircle className="w-4 h-4" /> Adicionar
+                </button>
               </div>
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-                {transactions.filter(t => t.type === 'INCOME').length > 0 ? (
-                  <div className="divide-y divide-slate-800">
-                    {transactions.filter(t => t.type === 'INCOME').map(t => renderTransactionRow(t, true))}
+
+              {renderFilterBar()}
+
+              <div className="space-y-3">
+                {filteredTransactions('INCOME').length > 0 ? (
+                  filteredTransactions('INCOME').map(t => renderModernTransactionRow(t, true))
+                ) : (
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
+                    <CheckCircle2 className="w-12 h-12 text-slate-600 mx-auto" />
+                    <p className="text-white font-bold text-lg">Sem previsões de entrada.</p>
+                    <p className="text-slate-400 text-sm">Nenhuma receita encontrada para estes filtros.</p>
                   </div>
-                ) : <p className="text-slate-400 text-sm py-4">Nenhuma conta a receber registada.</p>}
+                )}
               </div>
             </div>
           )}
