@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const [txDueDate, setTxDueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [txTotalInstallments, setTxTotalInstallments] = useState('1');
   const [txStartInstallment, setTxStartInstallment] = useState('1');
+  const [txAmountMode, setTxAmountMode] = useState<'TOTAL' | 'INSTALLMENT'>('TOTAL');
 
   // Modal Cartão & Objetivos
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -314,6 +315,12 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!canCreateTransactions) return;
     if (!txDescription || !txAmount) return;
+    const totalInstallments = Number(txTotalInstallments) || 1;
+    const startInstallment = Number(txStartInstallment) || 1;
+    if (!Number.isInteger(totalInstallments) || totalInstallments < 1 || !Number.isInteger(startInstallment) || startInstallment < 1 || startInstallment > totalInstallments) {
+      setError('Informe um intervalo válido de parcelas.');
+      return;
+    }
     const matchingCategories = categories.filter(category => category.flow_type === txType);
     if (matchingCategories.length > 0 && !matchingCategories.some(category => String(category.id) === String(txCategoryId))) {
       setError('Selecione uma categoria para este lançamento.');
@@ -340,12 +347,16 @@ export default function DashboardPage() {
     const transactionDueDate = cardForTransaction
       ? getCardPurchaseDueDate(txTransactionDate, Number(cardForTransaction.closing_day), Number(cardForTransaction.due_day))
       : txDueDate;
+    const enteredAmount = Number(txAmount.toString().replace(',', '.'));
+    const transactionAmount = totalInstallments > 1 && txAmountMode === 'INSTALLMENT'
+      ? Math.round(enteredAmount * totalInstallments * 100) / 100
+      : enteredAmount;
 
     try {
       const payload = {
         family_id: resolvedFamilyId,
         description: txDescription.trim(),
-        amount: Number(txAmount.toString().replace(',', '.')),
+        amount: transactionAmount,
         type: txType,
         payment_method: txPaymentMethod,
         account_id: txAccountId ? txAccountId : (accounts.length > 0 ? accounts[0].id : null),
@@ -371,6 +382,7 @@ export default function DashboardPage() {
         setTxCategoryId('');
         setTxTotalInstallments('1');
         setTxStartInstallment('1');
+        setTxAmountMode('TOTAL');
         await fetchData();
       } else {
         const data = await res.json();
@@ -2452,7 +2464,7 @@ export default function DashboardPage() {
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Valor Total (R$)</label><input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
+                <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">{Number(txTotalInstallments) > 1 && txAmountMode === 'INSTALLMENT' ? 'Valor de Cada Parcela (R$)' : 'Valor Total (R$)'}</label><input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Forma Pagamento</label>
                   <select value={txPaymentMethod} onChange={e => setTxPaymentMethod(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"><option value="BOLETO">Boleto / Pix / Dinheiro</option><option value="CARD">Cartão de Crédito</option></select>
@@ -2467,6 +2479,28 @@ export default function DashboardPage() {
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Total de Parcelas</label><input type="number" min="1" max="48" value={txTotalInstallments} onChange={e => setTxTotalInstallments(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Iniciar da Parcela</label><input type="number" min="1" max="48" value={txStartInstallment} onChange={e => setTxStartInstallment(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
               </div>
+              {Number(txTotalInstallments) > 1 && (
+                <fieldset className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+                  <legend className="px-1 text-xs font-bold uppercase text-slate-400">O valor informado é</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-800 p-2 text-xs text-slate-300 cursor-pointer">
+                      <input type="radio" name="txAmountMode" checked={txAmountMode === 'TOTAL'} onChange={() => setTxAmountMode('TOTAL')} className="text-emerald-500 focus:ring-emerald-500" />
+                      O total da compra
+                    </label>
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-800 p-2 text-xs text-slate-300 cursor-pointer">
+                      <input type="radio" name="txAmountMode" checked={txAmountMode === 'INSTALLMENT'} onChange={() => setTxAmountMode('INSTALLMENT')} className="text-emerald-500 focus:ring-emerald-500" />
+                      O valor de cada parcela
+                    </label>
+                  </div>
+                  {Number(txAmount) > 0 && (
+                    <p className="mt-2 text-xs text-slate-400">
+                      {txAmountMode === 'INSTALLMENT'
+                        ? `${Number(txTotalInstallments) - Number(txStartInstallment) + 1} parcelas de ${formatCurrency(Number(txAmount))}. Total: ${formatCurrency(Number(txAmount) * Number(txTotalInstallments))}.`
+                        : `Cada parcela: ${formatCurrency(Number(txAmount) / Number(txTotalInstallments))}.`}
+                    </p>
+                  )}
+                </fieldset>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Data Lançamento</label><input type="date" value={txTransactionDate} onChange={e => setTxTransactionDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">{calculatedCardDueDate ? 'Vencimento da fatura' : 'Vencimento'}</label><input type="date" value={calculatedCardDueDate || txDueDate} onChange={e => setTxDueDate(e.target.value)} readOnly={Boolean(calculatedCardDueDate)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white read-only:opacity-70" /></div>
