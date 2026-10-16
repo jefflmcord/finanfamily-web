@@ -20,6 +20,16 @@ import {
 } from 'lucide-react';
 
 type InterfaceTheme = 'dark' | 'light';
+type SettingsSection = 'profile' | 'appearance' | 'family';
+
+interface UserProfile {
+  name: string;
+  email: string;
+  phone: string;
+  avatar_url: string;
+  birth_date: string;
+  bio: string;
+}
 
 const getInterfaceTheme = (): InterfaceTheme =>
   window.localStorage.getItem('@FinanFamily:theme') === 'light' ? 'light' : 'dark';
@@ -40,6 +50,18 @@ export default function DashboardPage() {
   const [activeSubMenu, setActiveSubMenu] = useState<string>('geral');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('profile');
+  const [profile, setProfile] = useState<UserProfile>({
+    name: '',
+    email: '',
+    phone: '',
+    avatar_url: '',
+    birth_date: '',
+    bio: '',
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileNotice, setProfileNotice] = useState('');
   const theme = useSyncExternalStore(
     subscribeToInterfaceTheme,
     getInterfaceTheme,
@@ -178,6 +200,14 @@ export default function DashboardPage() {
         const user = JSON.parse(userStr);
         setUserName(user.name || 'Família');
         setUserEmail(typeof user.email === 'string' ? user.email : '');
+        setProfile({
+          name: typeof user.name === 'string' ? user.name : '',
+          email: typeof user.email === 'string' ? user.email : '',
+          phone: typeof user.phone === 'string' ? user.phone : '',
+          avatar_url: typeof user.avatar_url === 'string' ? user.avatar_url : '',
+          birth_date: typeof user.birth_date === 'string' ? user.birth_date.slice(0, 10) : '',
+          bio: typeof user.bio === 'string' ? user.bio : '',
+        });
         setUserAvatarUrl(
           typeof user.avatar_url === 'string' && user.avatar_url
             ? user.avatar_url
@@ -196,6 +226,39 @@ export default function DashboardPage() {
       if (!accessRes.ok) throw new Error(accessData.error || 'Não foi possível validar suas permissões.');
       setFamilyAccess(accessData);
       setFamilyId(String(accessData.familyId));
+
+      try {
+        const profileResponse = await authenticatedFetch(`${API_URL}/api/family/profile`);
+        const profileData = await profileResponse.json();
+        if (!profileResponse.ok) throw new Error(profileData.error || 'Não foi possível carregar seu perfil.');
+        const loadedProfile: UserProfile = {
+          name: typeof profileData.name === 'string' ? profileData.name : '',
+          email: typeof profileData.email === 'string' ? profileData.email : '',
+          phone: typeof profileData.phone === 'string' ? profileData.phone : '',
+          avatar_url: typeof profileData.avatar_url === 'string' ? profileData.avatar_url : '',
+          birth_date: typeof profileData.birth_date === 'string' ? profileData.birth_date.slice(0, 10) : '',
+          bio: typeof profileData.bio === 'string' ? profileData.bio : '',
+        };
+        setProfile(loadedProfile);
+        setUserName(loadedProfile.name || 'Família');
+        setUserEmail(loadedProfile.email);
+        setUserAvatarUrl(loadedProfile.avatar_url || null);
+
+        let storedUser: Record<string, unknown> = {};
+        if (userStr) {
+          try {
+            const parsedUser: unknown = JSON.parse(userStr);
+            if (parsedUser && typeof parsedUser === 'object' && !Array.isArray(parsedUser)) {
+              storedUser = parsedUser as Record<string, unknown>;
+            }
+          } catch (storageError) {
+            console.error('Não foi possível preservar os dados locais da sessão:', storageError);
+          }
+        }
+        localStorage.setItem('@FinanFamily:user', JSON.stringify({ ...storedUser, ...profileData }));
+      } catch (profileLoadError) {
+        setProfileError(profileLoadError instanceof Error ? profileLoadError.message : 'Não foi possível carregar seu perfil.');
+      }
 
       if (accessData.role !== 'OWNER' && accessData.permissions?.family_read !== true) {
         setAccounts([]);
@@ -230,6 +293,60 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const saveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSavingProfile(true);
+    setProfileError('');
+    setProfileNotice('');
+    try {
+      const response = await authenticatedFetch(`${API_URL}/api/family/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: profile.name,
+          phone: profile.phone,
+          avatar_url: profile.avatar_url,
+          birth_date: profile.birth_date,
+          bio: profile.bio,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Não foi possível salvar seu perfil.');
+
+      const savedProfile: UserProfile = {
+        name: result.name || '',
+        email: result.email || '',
+        phone: result.phone || '',
+        avatar_url: result.avatar_url || '',
+        birth_date: typeof result.birth_date === 'string' ? result.birth_date.slice(0, 10) : '',
+        bio: result.bio || '',
+      };
+      setProfile(savedProfile);
+      setUserName(savedProfile.name || 'Família');
+      setUserEmail(savedProfile.email);
+      setUserAvatarUrl(savedProfile.avatar_url || null);
+
+      let storedUser: Record<string, unknown> = {};
+      const currentUser = localStorage.getItem('@FinanFamily:user');
+      if (currentUser) {
+        try {
+          const parsedUser: unknown = JSON.parse(currentUser);
+          if (parsedUser && typeof parsedUser === 'object' && !Array.isArray(parsedUser)) {
+            storedUser = parsedUser as Record<string, unknown>;
+          }
+        } catch (storageError) {
+          console.error('Não foi possível preservar os dados locais da sessão:', storageError);
+        }
+      }
+      localStorage.setItem('@FinanFamily:user', JSON.stringify({ ...storedUser, ...result }));
+      setProfileNotice('Perfil atualizado com sucesso.');
+    } catch (saveError) {
+      setProfileError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar seu perfil.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const formatCurrency = (val: any) => {
     const n = Number(val);
@@ -1742,46 +1859,159 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <div className="flex-1 space-y-6 overflow-y-auto p-5 sm:p-7">
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-300">
-                    {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Aparência</h3>
-                    <p className="mt-0.5 text-xs text-slate-400">Escolha entre o modo claro e o modo escuro.</p>
-                  </div>
-                </div>
-                <div role="group" aria-label="Tema da interface" className="mt-4 grid grid-cols-2 gap-2">
+            <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
+              <nav aria-label="Seções das configurações" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {([
+                  ['profile', 'Perfil'],
+                  ['appearance', 'Aparência'],
+                  ...(familyAccess?.role === 'OWNER' ? [['family', 'Membros da família']] : []),
+                ] as [SettingsSection, string][]).map(([section, label]) => (
                   <button
+                    key={section}
                     type="button"
-                    aria-pressed={theme === 'light'}
-                    onClick={() => theme !== 'light' && toggleTheme()}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
-                      theme === 'light'
+                    aria-current={settingsSection === section ? 'page' : undefined}
+                    onClick={() => {
+                      setSettingsSection(section);
+                      setProfileError('');
+                      setProfileNotice('');
+                    }}
+                    className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${
+                      settingsSection === section
                         ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                        : 'border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
+                        : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800'
                     }`}
                   >
-                    <Sun className="h-4 w-4" /> Claro
+                    {label}
                   </button>
-                  <button
-                    type="button"
-                    aria-pressed={theme === 'dark'}
-                    onClick={() => theme !== 'dark' && toggleTheme()}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
-                      theme === 'dark'
-                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                        : 'border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
-                    }`}
-                  >
-                    <Moon className="h-4 w-4" /> Escuro
-                  </button>
-                </div>
-              </section>
+                ))}
+              </nav>
 
-              {familyAccess?.role === 'OWNER' && (
+              {settingsSection === 'profile' && (
+                <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+                  <div className="mb-5">
+                    <h3 className="text-sm font-bold text-white">Perfil pessoal</h3>
+                    <p className="mt-1 text-xs text-slate-400">Atualize as informações exibidas na sua conta.</p>
+                  </div>
+                  <form onSubmit={saveProfile} className="space-y-4">
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-300">Nome de exibição</span>
+                      <input
+                        required
+                        maxLength={100}
+                        value={profile.name}
+                        onChange={event => setProfile(current => ({ ...current, name: event.target.value }))}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-300">E-mail</span>
+                      <input
+                        type="email"
+                        value={profile.email}
+                        readOnly
+                        className="w-full cursor-not-allowed rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-500"
+                      />
+                      <span className="block text-[11px] text-slate-500">O e-mail usado para entrar não pode ser alterado.</span>
+                    </label>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-semibold text-slate-300">Telefone</span>
+                        <input
+                          type="tel"
+                          maxLength={30}
+                          value={profile.phone}
+                          onChange={event => setProfile(current => ({ ...current, phone: event.target.value }))}
+                          className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                        />
+                      </label>
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-semibold text-slate-300">Data de nascimento</span>
+                        <input
+                          type="date"
+                          max={new Date().toISOString().slice(0, 10)}
+                          value={profile.birth_date}
+                          onChange={event => setProfile(current => ({ ...current, birth_date: event.target.value }))}
+                          className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                        />
+                      </label>
+                    </div>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-300">Foto de perfil (URL)</span>
+                      <input
+                        type="url"
+                        maxLength={2048}
+                        placeholder="https://..."
+                        value={profile.avatar_url}
+                        onChange={event => setProfile(current => ({ ...current, avatar_url: event.target.value }))}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-300">Descrição pessoal</span>
+                      <textarea
+                        maxLength={280}
+                        rows={3}
+                        value={profile.bio}
+                        onChange={event => setProfile(current => ({ ...current, bio: event.target.value }))}
+                        className="w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                      <span className="block text-right text-[11px] text-slate-500">{profile.bio.length}/280</span>
+                    </label>
+                    {profileError && <p role="alert" className="text-sm text-rose-400">{profileError}</p>}
+                    {profileNotice && <p role="status" className="text-sm text-emerald-400">{profileNotice}</p>}
+                    <button
+                      type="submit"
+                      disabled={savingProfile}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      {savingProfile ? 'Salvando...' : 'Guardar alterações'}
+                    </button>
+                  </form>
+                </section>
+              )}
+
+              {settingsSection === 'appearance' && (
+                <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-300">
+                      {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Aparência</h3>
+                      <p className="mt-0.5 text-xs text-slate-400">Escolha entre o modo claro e o modo escuro.</p>
+                    </div>
+                  </div>
+                  <div role="group" aria-label="Tema da interface" className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={theme === 'light'}
+                      onClick={() => theme !== 'light' && toggleTheme()}
+                      className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
+                        theme === 'light'
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                          : 'border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Sun className="h-4 w-4" /> Claro
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={theme === 'dark'}
+                      onClick={() => theme !== 'dark' && toggleTheme()}
+                      className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
+                        theme === 'dark'
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                          : 'border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Moon className="h-4 w-4" /> Escuro
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {settingsSection === 'family' && familyAccess?.role === 'OWNER' && (
                 <section className="space-y-4">
                   <div>
                     <h3 className="text-sm font-bold text-white">Membros da família</h3>
