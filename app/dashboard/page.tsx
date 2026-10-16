@@ -619,6 +619,78 @@ export default function DashboardPage() {
           return ym ? `${ym.year}-${ym.month}` : '';
         }).filter(Boolean)).size);
 
+  const projectionToday = new Date();
+  projectionToday.setHours(0, 0, 0, 0);
+  const projectionTodayKey = `${projectionToday.getFullYear()}-${String(projectionToday.getMonth() + 1).padStart(2, '0')}-${String(projectionToday.getDate()).padStart(2, '0')}`;
+  const projectionStartMonth = new Date(projectionToday.getFullYear(), projectionToday.getMonth(), 1);
+  const projectionMonths = Array.from({ length: 12 }, (_, index) => {
+    const monthDate = new Date(projectionStartMonth.getFullYear(), projectionStartMonth.getMonth() + index, 1);
+    return {
+      key: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`,
+      label: monthDate.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+      netChange: 0,
+      projectedBalance: 0,
+    };
+  });
+  const projectionMonthIndexes = new Map(projectionMonths.map((month, index) => [month.key, index]));
+  const projectionPendingTransactions = transactions.filter(transaction =>
+    transaction.status !== 'PAID' &&
+    (transaction.type === 'INCOME' || transaction.type === 'EXPENSE') &&
+    typeof transaction.due_date === 'string' &&
+    Number.isFinite(Number(transaction.amount))
+  );
+  let projectionIncludedTransactionCount = 0;
+  projectionPendingTransactions.forEach(transaction => {
+    const dueDate = transaction.due_date.slice(0, 10);
+    const dueMonth = dueDate < projectionTodayKey
+      ? projectionMonths[0].key
+      : dueDate.slice(0, 7);
+    const monthIndex = projectionMonthIndexes.get(dueMonth);
+    if (monthIndex === undefined) return;
+    projectionIncludedTransactionCount += 1;
+    const direction = transaction.type === 'INCOME' ? 1 : -1;
+    projectionMonths[monthIndex].netChange += direction * Number(transaction.amount || 0);
+  });
+  let runningProjectedBalance = totalBalance;
+  projectionMonths.forEach(month => {
+    runningProjectedBalance += month.netChange;
+    month.projectedBalance = runningProjectedBalance;
+  });
+  const projectionValues = [totalBalance, ...projectionMonths.map(month => month.projectedBalance)];
+  const lowestProjectedBalance = Math.min(...projectionValues);
+  const lowestProjectedMonthIndex = projectionValues.indexOf(lowestProjectedBalance) - 1;
+  const lowestProjectedLabel = lowestProjectedMonthIndex < 0
+    ? 'Saldo atual'
+    : projectionMonths[lowestProjectedMonthIndex].label;
+  const projectionChartWidth = 760;
+  const projectionChartHeight = 280;
+  const projectionChartLeft = 64;
+  const projectionChartRight = 744;
+  const projectionChartTop = 24;
+  const projectionChartBottom = 220;
+  const projectionChartMin = Math.min(...projectionValues);
+  const projectionChartMax = Math.max(...projectionValues);
+  const projectionChartPadding = Math.max((projectionChartMax - projectionChartMin) * 0.15, Math.abs(projectionChartMax) * 0.04, 100);
+  const projectionChartDomainMin = projectionChartMin - projectionChartPadding;
+  const projectionChartDomainMax = projectionChartMax + projectionChartPadding;
+  const projectionChartPoints = projectionValues.map((balance, index) => {
+    const x = projectionChartLeft + (index / 12) * (projectionChartRight - projectionChartLeft);
+    const y = projectionChartBottom -
+      ((balance - projectionChartDomainMin) / (projectionChartDomainMax - projectionChartDomainMin)) *
+      (projectionChartBottom - projectionChartTop);
+    return { x, y, balance };
+  });
+  const projectionLinePath = projectionChartPoints
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ');
+  const projectionAreaPath = `${projectionLinePath} L ${projectionChartPoints[projectionChartPoints.length - 1].x} ${projectionChartBottom} L ${projectionChartPoints[0].x} ${projectionChartBottom} Z`;
+  const projectionChartTicks = Array.from({ length: 4 }, (_, index) => {
+    const ratio = index / 3;
+    const value = projectionChartDomainMax - ratio * (projectionChartDomainMax - projectionChartDomainMin);
+    const y = projectionChartTop + ratio * (projectionChartBottom - projectionChartTop);
+    return { value, y };
+  });
+
   const yearIncomeTotal = yearTransactions
     .filter(t => t.type === 'INCOME')
     .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
@@ -1908,6 +1980,122 @@ export default function DashboardPage() {
                   </div>
                 );
               })()}
+
+              <section className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/20 border border-slate-800/90 rounded-3xl p-6 shadow-xl">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-300">
+                        <TrendingUp className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-100">
+                          Projeção do saldo futuro
+                        </h2>
+                        <p className="mt-1 text-xs text-slate-400">Estimativa para os próximos 12 meses</p>
+                      </div>
+                    </div>
+                    <p className="mt-3 max-w-2xl text-xs text-slate-500">
+                      Calculada a partir do saldo atual das contas e dos lançamentos pendentes por vencimento.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300">
+                    {projectionIncludedTransactionCount} lançamento(s) pendente(s) no período
+                  </span>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Saldo atual</p>
+                    <strong className="mt-1 block text-lg font-black text-slate-100">{formatCurrency(totalBalance)}</strong>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Saldo em 12 meses</p>
+                    <strong className={`mt-1 block text-lg font-black ${runningProjectedBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {formatCurrency(runningProjectedBalance)}
+                    </strong>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Menor saldo projetado</p>
+                    <strong className={`mt-1 block text-lg font-black ${lowestProjectedBalance >= 0 ? 'text-amber-300' : 'text-rose-400'}`}>
+                      {formatCurrency(lowestProjectedBalance)}
+                    </strong>
+                    <span className="text-[11px] capitalize text-slate-500">{lowestProjectedLabel}</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                  <svg
+                    viewBox={`0 0 ${projectionChartWidth} ${projectionChartHeight}`}
+                    role="img"
+                    aria-label={`Projeção mensal do saldo: saldo atual ${formatCurrency(totalBalance)}, saldo ao final de 12 meses ${formatCurrency(runningProjectedBalance)}.`}
+                    className="min-w-[640px] w-full"
+                    preserveAspectRatio="none"
+                  >
+                    <defs>
+                      <linearGradient id="future-balance-area" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor={runningProjectedBalance >= totalBalance ? '#34d399' : '#fb7185'} stopOpacity="0.25" />
+                        <stop offset="100%" stopColor={runningProjectedBalance >= totalBalance ? '#34d399' : '#fb7185'} stopOpacity="0.01" />
+                      </linearGradient>
+                    </defs>
+                    {projectionChartTicks.map((tick, index) => (
+                      <g key={index}>
+                        <line
+                          x1={projectionChartLeft}
+                          x2={projectionChartRight}
+                          y1={tick.y}
+                          y2={tick.y}
+                          stroke="#334155"
+                          strokeDasharray="4 6"
+                          strokeOpacity="0.65"
+                        />
+                        <text x="2" y={tick.y + 4} fill="#94a3b8" fontSize="11">
+                          {formatCompactCurrency(tick.value)}
+                        </text>
+                      </g>
+                    ))}
+                    <path d={projectionAreaPath} fill="url(#future-balance-area)" />
+                    <path
+                      d={projectionLinePath}
+                      fill="none"
+                      stroke={runningProjectedBalance >= totalBalance ? '#34d399' : '#fb7185'}
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    {projectionChartPoints.map((point, index) => (
+                      <g key={index}>
+                        <circle
+                          cx={point.x}
+                          cy={point.y}
+                          r={index === projectionChartPoints.length - 1 ? 5 : 3}
+                          fill={runningProjectedBalance >= totalBalance ? '#34d399' : '#fb7185'}
+                          stroke="#0f172a"
+                          strokeWidth="2"
+                        >
+                          <title>
+                            {index === 0 ? 'Hoje' : projectionMonths[index - 1].label}: {formatCurrency(point.balance)}
+                          </title>
+                        </circle>
+                        {index > 0 && (
+                          <text
+                            x={point.x}
+                            y="250"
+                            textAnchor="middle"
+                            fill="#94a3b8"
+                            fontSize="10"
+                            className="capitalize"
+                          >
+                            {projectionMonths[index - 1].label}
+                          </text>
+                        )}
+                      </g>
+                    ))}
+                    <text x={projectionChartLeft} y="273" fill="#64748b" fontSize="10">Hoje</text>
+                    <text x={projectionChartRight} y="273" textAnchor="end" fill="#64748b" fontSize="10">12 meses</text>
+                  </svg>
+                </div>
+              </section>
 
               {/* Indicador mensal de comprometimento financeiro */}
               <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl">
