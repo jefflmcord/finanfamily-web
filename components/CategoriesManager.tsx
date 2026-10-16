@@ -21,6 +21,7 @@ interface CategoryItem {
   flow_type: 'EXPENSE' | 'INCOME';
   color: string;
   transaction_count: number;
+  budget_amount: number | null;
 }
 
 interface CategoriesManagerProps {
@@ -40,6 +41,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
   const [name, setName] = useState('');
   const [costType, setCostType] = useState<'FIXED' | 'VARIABLE'>('VARIABLE');
   const [color, setColor] = useState('#10b981');
+  const [budgetAmount, setBudgetAmount] = useState('');
   const [flowType, setFlowType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,14 +87,16 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
               name: name.trim(),
               type: costType,
               flow_type: flowType,
-              color: color || '#10b981'
+              color: color || '#10b981',
+              budget_amount: budgetAmount || null
             }
           : {
               family_id: familyId,
               name: name.trim(),
               type: costType,
               flow_type: activeTab,
-              color: color || '#10b981'
+              color: color || '#10b981',
+              budget_amount: activeTab === 'EXPENSE' ? budgetAmount || null : null
             })
       });
 
@@ -138,6 +142,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
     setName(category.name);
     setCostType(category.type || 'VARIABLE');
     setColor(category.color || '#10b981');
+    setBudgetAmount(category.budget_amount == null ? '' : String(category.budget_amount));
     setFlowType(category.flow_type || 'EXPENSE');
     setActiveTab(category.flow_type || 'EXPENSE');
     setError(null);
@@ -148,6 +153,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
     setName('');
     setCostType('VARIABLE');
     setColor('#10b981');
+    setBudgetAmount('');
     setFlowType(activeTab);
     setError(null);
   }
@@ -204,7 +210,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
           </div>
         )}
 
-        <form onSubmit={handleCreateCategory} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+        <form onSubmit={handleCreateCategory} className="grid grid-cols-1 gap-3 items-end sm:grid-cols-2 lg:grid-cols-5">
           <div className="sm:col-span-2">
             <label className="block text-xs font-medium text-slate-400 mb-1">Nome da Categoria</label>
             <input
@@ -254,6 +260,22 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
             />
           </div>
 
+          {(editingCategory ? flowType : activeTab) === 'EXPENSE' && (
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Orçamento mensal (opcional)</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={budgetAmount}
+                onChange={(event) => setBudgetAmount(event.target.value)}
+                placeholder="Ex.: 800,00"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+              />
+              <p className="mt-1 text-[10px] text-slate-500">Este limite será aplicado em todos os meses.</p>
+            </div>
+          )}
+
           <div>
             <button
               type="submit"
@@ -265,7 +287,7 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
             </button>
           </div>
           {editingCategory && (
-            <div className="sm:col-span-4 flex justify-end">
+            <div className="sm:col-span-2 lg:col-span-5 flex justify-end">
               <button type="button" onClick={resetForm} className="flex items-center gap-1 text-xs text-slate-400 hover:text-white">
                 <X className="w-4 h-4" /> Cancelar edição
               </button>
@@ -303,6 +325,11 @@ export default function CategoriesManager({ familyId, apiUrl = 'https://finanfam
                     <span className="text-[10px] text-slate-500 uppercase">
                       {cat.type === 'FIXED' ? 'Fixa' : 'Variável'}
                     </span>
+                    {cat.flow_type === 'EXPENSE' && cat.budget_amount != null && (
+                      <span className="block text-[10px] font-semibold text-amber-300">
+                        Limite mensal: R$ {Number(cat.budget_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
                     {isInvestmentCategory(cat) ? (
                       <span className="flex items-center gap-1 text-[10px] text-amber-400">
                         <ShieldCheck className="w-3 h-3" /> Protegida

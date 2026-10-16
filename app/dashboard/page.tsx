@@ -30,16 +30,10 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [creditCards, setCreditCards] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [familyBudgets, setFamilyBudgets] = useState<any[]>([]);
   const [budgetPeriod, setBudgetPeriod] = useState(() => {
     const today = new Date();
     return { year: today.getFullYear(), month: today.getMonth() + 1 };
   });
-  const [budgetCategoryId, setBudgetCategoryId] = useState('');
-  const [budgetAmount, setBudgetAmount] = useState('');
-  const [budgetSaving, setBudgetSaving] = useState(false);
-  const [budgetEditingId, setBudgetEditingId] = useState<string | null>(null);
-  const [budgetError, setBudgetError] = useState('');
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -165,7 +159,6 @@ export default function DashboardPage() {
         setCategories([]);
         setCreditCards([]);
         setTransactions([]);
-        setFamilyBudgets([]);
         return;
       }
 
@@ -173,8 +166,7 @@ export default function DashboardPage() {
         authenticatedFetch(`${API_URL}/api/accounts?family_id=${encodeURIComponent(accessData.familyId)}`),
         authenticatedFetch(`${API_URL}/api/categories?family_id=${encodeURIComponent(accessData.familyId)}`),
         authenticatedFetch(`${API_URL}/api/credit-cards?family_id=${encodeURIComponent(accessData.familyId)}`),
-        authenticatedFetch(`${API_URL}/api/transactions?family_id=${encodeURIComponent(accessData.familyId)}`),
-        authenticatedFetch(`${API_URL}/api/budgets?family_id=${encodeURIComponent(accessData.familyId)}`)
+        authenticatedFetch(`${API_URL}/api/transactions?family_id=${encodeURIComponent(accessData.familyId)}`)
       ]);
       const data = await Promise.all(dataResponses.map(async response => {
         const result = await response.json();
@@ -185,7 +177,6 @@ export default function DashboardPage() {
       setCategories(data[1]);
       setCreditCards(data[2]);
       setTransactions(data[3]);
-      setFamilyBudgets(data[4]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar os dados da família.');
     } finally {
@@ -767,6 +758,20 @@ export default function DashboardPage() {
 
   const yearNetProjected = yearIncomeTotal - yearExpenseTotal;
   const yearNetRealized = yearIncomePaid - yearExpensePaid;
+  const monthlyBudgets = categories
+    .filter(category => category.flow_type === 'EXPENSE' && Number(category.budget_amount) > 0)
+    .map(category => {
+      const spent = transactions
+        .filter(transaction => {
+          const yearMonth = getTxYearMonth(transaction);
+          return transaction.type === 'EXPENSE' &&
+            String(transaction.category_id) === String(category.id) &&
+            yearMonth?.year === budgetPeriod.year &&
+            yearMonth.month === budgetPeriod.month;
+        })
+        .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+      return { ...category, category_id: category.id, category_name: category.name, amount: Number(category.budget_amount), spent };
+    });
   const yearSavingsRate = yearIncomeTotal > 0 ? Math.max(0, ((yearIncomeTotal - yearExpenseTotal) / yearIncomeTotal) * 100) : 0;
   const yearCommitmentRate = yearIncomeTotal > 0 ? Math.min(100, (yearExpenseTotal / yearIncomeTotal) * 100) : 0;
   const yearIncomeReceivedRate = yearIncomeTotal > 0 ? Math.min(100, (yearIncomePaid / yearIncomeTotal) * 100) : 0;
@@ -910,78 +915,6 @@ export default function DashboardPage() {
       const nextMonth = new Date(current.year, current.month - 1 + monthOffset, 1);
       return { year: nextMonth.getFullYear(), month: nextMonth.getMonth() + 1 };
     });
-    setBudgetEditingId(null);
-    setBudgetCategoryId('');
-    setBudgetAmount('');
-    setBudgetError('');
-  };
-
-  const refreshFamilyBudgets = async () => {
-    const response = await authenticatedFetch(`${API_URL}/api/budgets?family_id=${encodeURIComponent(familyId)}`);
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Não foi possível atualizar os orçamentos.');
-    setFamilyBudgets(result);
-  };
-
-  const saveFamilyBudget = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const amount = Number(budgetAmount.replace(',', '.'));
-    if (!budgetCategoryId || !Number.isFinite(amount) || amount <= 0) {
-      setBudgetError('Selecione uma categoria e informe um limite mensal maior que zero.');
-      return;
-    }
-
-    setBudgetSaving(true);
-    setBudgetError('');
-    try {
-      const response = await authenticatedFetch(`${API_URL}/api/budgets`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category_id: budgetCategoryId,
-          year: budgetPeriod.year,
-          month: budgetPeriod.month,
-          amount
-        })
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Não foi possível salvar o orçamento.');
-      await refreshFamilyBudgets();
-      setBudgetCategoryId('');
-      setBudgetAmount('');
-      setBudgetEditingId(null);
-    } catch (saveError) {
-      setBudgetError(saveError instanceof Error ? saveError.message : 'Erro ao salvar o orçamento.');
-    } finally {
-      setBudgetSaving(false);
-    }
-  };
-
-  const editFamilyBudget = (budget: any) => {
-    setBudgetEditingId(String(budget.id));
-    setBudgetCategoryId(String(budget.category_id));
-    setBudgetAmount(String(budget.amount));
-    setBudgetError('');
-  };
-
-  const deleteFamilyBudget = async (budgetId: string) => {
-    if (!window.confirm('Deseja remover este orçamento mensal?')) return;
-    setBudgetError('');
-    try {
-      const response = await authenticatedFetch(`${API_URL}/api/budgets/${encodeURIComponent(budgetId)}`, {
-        method: 'DELETE'
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Não foi possível remover o orçamento.');
-      setFamilyBudgets(current => current.filter(budget => String(budget.id) !== budgetId));
-      if (budgetEditingId === budgetId) {
-        setBudgetEditingId(null);
-        setBudgetCategoryId('');
-        setBudgetAmount('');
-      }
-    } catch (deleteError) {
-      setBudgetError(deleteError instanceof Error ? deleteError.message : 'Erro ao remover o orçamento.');
-    }
   };
 
   let runningCumulativeBalance = 0;
@@ -2158,23 +2091,21 @@ export default function DashboardPage() {
               </section>
 
               <section className="bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/20 border border-slate-800/90 rounded-3xl p-6 shadow-xl">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
-                        <Wallet className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-100">
-                          Orçamento mensal por categoria
-                        </h2>
-                        <p className="mt-1 text-xs text-slate-400">
-                          Acompanhe os gastos e receba um alerta ao atingir 80% ou ultrapassar o limite.
-                        </p>
-                      </div>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
+                      <Wallet className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-100">
+                        Orçamento mensal por categoria
+                      </h2>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Limites configurados no cadastro de categorias; o acompanhamento varia por mês.
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 self-start rounded-xl border border-slate-800 bg-slate-950 p-1">
+                  <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1">
                     <button
                       type="button"
                       onClick={() => changeBudgetPeriod(-1)}
@@ -2196,68 +2127,8 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </div>
-
-                {canManageCategories && (
-                  <form onSubmit={saveFamilyBudget} className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)_auto_auto] md:items-end">
-                    <label className="text-xs font-semibold text-slate-400">
-                      Categoria de despesa
-                      <select
-                        required
-                        value={budgetCategoryId}
-                        onChange={event => setBudgetCategoryId(event.target.value)}
-                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-amber-500"
-                      >
-                        <option value="">Selecione uma categoria</option>
-                        {categories.filter(category => category.flow_type === 'EXPENSE').map(category => (
-                          <option key={category.id} value={category.id}>{category.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="text-xs font-semibold text-slate-400">
-                      Limite mensal
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        required
-                        value={budgetAmount}
-                        onChange={event => setBudgetAmount(event.target.value)}
-                        placeholder="Ex.: 800,00"
-                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-amber-500"
-                      />
-                    </label>
-                    <button
-                      type="submit"
-                      disabled={budgetSaving}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {budgetSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                      {budgetEditingId ? 'Atualizar limite' : 'Definir limite'}
-                    </button>
-                    {budgetEditingId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBudgetEditingId(null);
-                          setBudgetCategoryId('');
-                          setBudgetAmount('');
-                          setBudgetError('');
-                        }}
-                        className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-800"
-                      >
-                        Cancelar
-                      </button>
-                    )}
-                    {budgetError && (
-                      <p role="alert" className="text-xs text-rose-300 md:col-span-full">{budgetError}</p>
-                    )}
-                  </form>
-                )}
-
                 <div className="mt-5 space-y-3">
-                  {familyBudgets
-                    .filter(budget => Number(budget.year) === budgetPeriod.year && Number(budget.month) === budgetPeriod.month)
-                    .map(budget => {
+                  {monthlyBudgets.map(budget => {
                       const limit = Number(budget.amount || 0);
                       const spent = Number(budget.spent || 0);
                       const percentage = limit > 0 ? (spent / limit) * 100 : 0;
@@ -2299,33 +2170,13 @@ export default function DashboardPage() {
                               </div>
                               <p className={`mt-1.5 text-xs font-semibold ${statusColor}`}>{statusText}</p>
                             </div>
-                            {canManageCategories && (
-                              <div className="flex shrink-0 items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => editFamilyBudget(budget)}
-                                  className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800"
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteFamilyBudget(String(budget.id))}
-                                  className="rounded-lg border border-rose-500/20 px-3 py-2 text-xs font-bold text-rose-300 hover:bg-rose-500/10"
-                                >
-                                  Remover
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </article>
                       );
                     })}
-                  {familyBudgets.filter(
-                    budget => Number(budget.year) === budgetPeriod.year && Number(budget.month) === budgetPeriod.month
-                  ).length === 0 && (
+                  {monthlyBudgets.length === 0 && (
                     <p className="rounded-xl border border-dashed border-slate-800 px-4 py-6 text-center text-sm text-slate-500">
-                      Nenhum orçamento definido para este mês.
+                      Defina os limites mensais no cadastro das categorias de despesas para acompanhar seus gastos aqui.
                     </p>
                   )}
                 </div>
