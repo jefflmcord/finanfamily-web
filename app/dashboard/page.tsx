@@ -795,7 +795,15 @@ export default function DashboardPage() {
     }
     return `${localToday.getFullYear()}-01-01`;
   })();
-  const periodEndDate = filterPeriod === 'CUSTOM' ? customEndDate : filterPeriod === 'ALL' ? '' : todayKey;
+  const periodEndDate = filterPeriod === 'CUSTOM'
+    ? customEndDate
+    : filterPeriod === 'ALL'
+      ? ''
+      : filterPeriod === 'CURRENT_YEAR'
+        ? `${localToday.getFullYear()}-12-31`
+        : filterPeriod === 'CURRENT_MONTH'
+          ? `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-${String(new Date(localToday.getFullYear(), localToday.getMonth() + 1, 0).getDate()).padStart(2, '0')}`
+          : todayKey;
   const customPeriodInvalid = !dashboardPeriodOverride && filterPeriod === 'CUSTOM' &&
     (!customStartDate || !customEndDate || customStartDate > customEndDate);
 
