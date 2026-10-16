@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import CreditCardList from '@/components/CreditCardList';
+import AccountsManager from '@/components/AccountsManager';
 import CategoriesManager from '@/components/CategoriesManager';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
@@ -525,6 +526,7 @@ export default function DashboardPage() {
   const canEditTransactions = hasFamilyPermission('transactions_edit');
   const canDeleteTransactions = hasFamilyPermission('transactions_delete');
   const canSettleTransactions = hasFamilyPermission('transactions_settle');
+  const canManageAccounts = hasFamilyPermission('accounts_manage');
   const canManageCards = hasFamilyPermission('cards_manage');
   const canManageCategories = hasFamilyPermission('categories_manage');
   const canManageGoals = hasFamilyPermission('goals_manage');
@@ -2392,9 +2394,12 @@ export default function DashboardPage() {
           {activeModule === 'cadastros' && activeSubMenu === 'contas' && (
             <div className="space-y-6">
               <h2 className="text-2xl font-extrabold text-white">Contas Bancárias</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {accounts.map(acc => <div key={acc.id} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl"><p className="font-bold text-white text-lg">{acc.name}</p><p className="text-emerald-400 font-black text-xl mt-2">{formatCurrency(acc.balance || acc.current_balance)}</p></div>)}
-              </div>
+              <AccountsManager
+                familyId={familyId}
+                apiUrl={API_URL}
+                onUpdated={fetchData}
+                canManage={canManageAccounts}
+              />
             </div>
           )}
 

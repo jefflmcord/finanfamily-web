@@ -10,6 +10,7 @@ type PermissionKey =
   | 'transactions_edit'
   | 'transactions_delete'
   | 'transactions_settle'
+  | 'accounts_manage'
   | 'cards_manage'
   | 'categories_manage'
   | 'goals_manage';
@@ -35,6 +36,7 @@ const PERMISSIONS: { key: PermissionKey; label: string }[] = [
   { key: 'transactions_edit', label: 'Editar lançamentos' },
   { key: 'transactions_settle', label: 'Baixar pagamentos e recebimentos' },
   { key: 'transactions_delete', label: 'Excluir lançamentos' },
+  { key: 'accounts_manage', label: 'Cadastrar e editar contas bancárias' },
   { key: 'cards_manage', label: 'Cadastrar, editar e excluir cartões' },
   { key: 'categories_manage', label: 'Gerenciar categorias' },
   { key: 'goals_manage', label: 'Gerenciar metas de investimento' },
@@ -46,6 +48,7 @@ const DEFAULT_PERMISSIONS: Record<PermissionKey, boolean> = {
   transactions_edit: false,
   transactions_delete: false,
   transactions_settle: true,
+  accounts_manage: false,
   cards_manage: false,
   categories_manage: false,
   goals_manage: false,
