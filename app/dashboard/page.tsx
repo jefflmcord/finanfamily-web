@@ -609,8 +609,8 @@ export default function DashboardPage() {
           : { label: 'Muito alto', color: 'text-rose-400' };
   const commitmentNeedleAngle = 180 - Math.min(Math.max(monthlyCommitmentRate ?? 0, 0), 100) * 1.8;
   const commitmentNeedleRadians = (commitmentNeedleAngle * Math.PI) / 180;
-  const commitmentNeedleX = 130 + 96 * Math.cos(commitmentNeedleRadians);
-  const commitmentNeedleY = 130 + 96 * Math.sin(commitmentNeedleRadians);
+  const commitmentNeedleX = 130 + 100 * Math.cos(commitmentNeedleRadians);
+  const commitmentNeedleY = 130 - 100 * Math.sin(commitmentNeedleRadians);
 
   const CATEGORY_COLORS = ['#10b981', '#38bdf8', '#f59e0b', '#a855f7', '#f43f5e', '#6366f1'];
   const expensesByCategory: { [key: string]: number } = {};
