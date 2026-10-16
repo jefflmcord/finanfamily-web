@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const [filterMonth, setFilterMonth] = useState<number | 'ALL'>('ALL');
   const [filterYear, setFilterYear] = useState<number | 'ALL'>(new Date().getFullYear());
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'PENDING' | 'PAID' | 'OVERDUE'>('ALL');
+  const [payableView, setPayableView] = useState<'LIST' | 'KANBAN'>('LIST');
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
   const [payingExpenses, setPayingExpenses] = useState(false);
 
@@ -795,6 +796,26 @@ export default function DashboardPage() {
 
   const filteredPayableTransactions = filteredTransactions('EXPENSE');
   const filteredPayableTotal = filteredPayableTransactions.reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+  const payableKanbanColumns = [
+    {
+      key: 'OVERDUE',
+      title: 'Atrasado',
+      transactions: filteredPayableTransactions.filter(transaction => getTransactionStatus(transaction) === 'OVERDUE'),
+      color: 'rose'
+    },
+    {
+      key: 'PENDING',
+      title: 'A pagar',
+      transactions: filteredPayableTransactions.filter(transaction => getTransactionStatus(transaction) === 'PENDING'),
+      color: 'amber'
+    },
+    {
+      key: 'PAID',
+      title: 'Pago',
+      transactions: filteredPayableTransactions.filter(transaction => getTransactionStatus(transaction) === 'PAID'),
+      color: 'emerald'
+    }
+  ];
   const payableExpenses = filteredPayableTransactions.filter(t => getTransactionStatus(t) !== 'PAID');
   const selectedPayableExpenses = payableExpenses.filter(t => selectedExpenseIds.includes(String(t.id)));
   const allPayableExpensesSelected = payableExpenses.length > 0 && selectedPayableExpenses.length === payableExpenses.length;
@@ -1028,24 +1049,25 @@ export default function DashboardPage() {
 
   const handlePaySelectedExpenses = () => handlePayExpenses(selectedPayableExpenses);
 
-  const renderModernTransactionRow = (t: any, isIncome: boolean, compact = false) => {
+  const renderModernTransactionRow = (t: any, isIncome: boolean, compact = false, kanban = false) => {
     const status = getTransactionStatus(t);
     const isPaid = status === 'PAID';
     const isOverdue = status === 'OVERDUE';
     const isSelected = selectedExpenseIds.includes(String(t.id));
+    const small = compact || kanban;
 
     return (
-      <div key={t.id} className={`${compact ? 'p-2.5 sm:px-3.5 rounded-xl items-center gap-3' : 'p-4 sm:p-5 rounded-2xl sm:flex-row sm:justify-between sm:items-center gap-4'} border transition-all flex ${compact ? 'flex-row' : 'flex-col'} group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
-        <div className={`flex min-w-0 ${compact ? 'flex-1 items-center gap-2 sm:gap-3' : 'items-center gap-4'}`}>
+      <div key={t.id} className={`${kanban ? 'p-3 rounded-xl gap-2.5' : compact ? 'p-2.5 sm:px-3.5 rounded-xl items-center gap-3' : 'p-4 sm:p-5 rounded-2xl sm:flex-row sm:justify-between sm:items-center gap-4'} border transition-all flex ${compact ? 'flex-row' : 'flex-col'} group ${isPaid ? 'bg-slate-900/40 border-slate-800/50 opacity-60 hover:opacity-100' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
+        <div className={`flex min-w-0 ${compact ? 'flex-1 items-center gap-2 sm:gap-3' : kanban ? 'items-start gap-2.5' : 'items-center gap-4'}`}>
           {isIncome ? (
             canSettleTransactions ? (
               <button
                 onClick={() => handleToggleStatus(t)}
                 title={isPaid ? 'Marcar como pendente' : 'Marcar como pago'}
                 aria-label={isPaid ? `Marcar ${t.description} como pendente` : `Marcar ${t.description} como pago`}
-                className={`flex-shrink-0 ${compact ? 'p-0' : 'p-2 -ml-2'} transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
+                className={`flex-shrink-0 ${small ? 'p-0' : 'p-2 -ml-2'} transition-colors ${isPaid ? 'text-emerald-500' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
               >
-                {isPaid ? <CheckCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : isOverdue ? <AlertCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : <Circle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} />}
+                {isPaid ? <CheckCircle className={`${small ? 'w-5 h-5' : 'w-7 h-7'}`} /> : isOverdue ? <AlertCircle className={`${small ? 'w-5 h-5' : 'w-7 h-7'}`} /> : <Circle className={`${small ? 'w-5 h-5' : 'w-7 h-7'}`} />}
               </button>
             ) : isPaid ? (
               <CheckCircle className="w-7 h-7 flex-shrink-0 text-emerald-500" aria-label="Lançamento recebido" />
@@ -1053,7 +1075,7 @@ export default function DashboardPage() {
               <Circle className="w-7 h-7 flex-shrink-0 text-slate-600" aria-label="Lançamento pendente" />
             )
           ) : isPaid ? (
-            <CheckCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'} flex-shrink-0 text-emerald-500`} aria-label="Lançamento pago" />
+            <CheckCircle className={`${small ? 'w-5 h-5' : 'w-7 h-7'} flex-shrink-0 text-emerald-500`} aria-label="Lançamento pago" />
           ) : canSettleTransactions ? (
             <button
               type="button"
@@ -1063,17 +1085,17 @@ export default function DashboardPage() {
               onClick={() => handleExpenseSelection(String(t.id), !isSelected)}
               title={isSelected ? 'Desmarcar lançamento' : 'Selecionar para baixa'}
               aria-label={`${isSelected ? 'Desmarcar' : 'Selecionar'} ${t.description} para baixa`}
-              className={`flex-shrink-0 ${compact ? 'p-0' : 'p-2 -ml-2'} transition-colors disabled:opacity-40 ${isSelected ? 'text-emerald-400' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
+              className={`flex-shrink-0 ${small ? 'p-0' : 'p-2 -ml-2'} transition-colors disabled:opacity-40 ${isSelected ? 'text-emerald-400' : isOverdue ? 'text-rose-500 hover:text-rose-400' : 'text-slate-500 hover:text-emerald-400'}`}
             >
-              {isSelected ? <CheckCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : isOverdue ? <AlertCircle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} /> : <Circle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'}`} />}
+              {isSelected ? <CheckCircle className={`${small ? 'w-5 h-5' : 'w-7 h-7'}`} /> : isOverdue ? <AlertCircle className={`${small ? 'w-5 h-5' : 'w-7 h-7'}`} /> : <Circle className={`${small ? 'w-5 h-5' : 'w-7 h-7'}`} />}
             </button>
           ) : (
-            <Circle className={`${compact ? 'w-5 h-5' : 'w-7 h-7'} flex-shrink-0 text-slate-600`} aria-label="Lançamento pendente" />
+            <Circle className={`${small ? 'w-5 h-5' : 'w-7 h-7'} flex-shrink-0 text-slate-600`} aria-label="Lançamento pendente" />
           )}
           
           <div className="min-w-0">
-            <p className={`font-bold ${compact ? 'text-sm line-clamp-2' : 'text-base break-words'} ${isPaid ? 'text-slate-400 line-through' : 'text-white'}`}>{t.description}</p>
-            <div className={`flex flex-wrap items-center gap-2 ${compact ? 'mt-1.5' : 'mt-1'} text-xs font-medium`}>
+            <p className={`font-bold ${small ? 'text-sm line-clamp-2' : 'text-base break-words'} ${isPaid ? 'text-slate-400 line-through' : 'text-white'}`}>{t.description}</p>
+            <div className={`flex flex-wrap items-center gap-2 ${small ? 'mt-1.5' : 'mt-1'} text-xs font-medium`}>
               <span className={`px-2 py-0.5 rounded-md ${isPaid ? 'bg-slate-800 text-slate-400' : isOverdue ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-300'}`}>
                 <Calendar className="w-3 h-3 inline mr-1 -mt-0.5" />
                 {formatDatePT(t.due_date)}
@@ -1092,8 +1114,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className={`flex flex-wrap items-center justify-end ${compact ? 'shrink-0 gap-2 sm:gap-4' : 'justify-between sm:justify-end gap-3 w-full sm:w-auto'}`}>
-          <span className={`${compact ? 'text-sm sm:text-base whitespace-nowrap' : 'text-lg'} font-black ${isPaid ? 'text-slate-500' : isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <div className={`flex flex-wrap items-center ${compact ? 'justify-end shrink-0 gap-2 sm:gap-4' : kanban ? 'justify-between w-full border-t border-slate-800/70 pt-2' : 'justify-between sm:justify-end gap-3 w-full sm:w-auto'}`}>
+          <span className={`${small ? 'text-sm sm:text-base whitespace-nowrap' : 'text-lg'} font-black ${isPaid ? 'text-slate-500' : isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatCurrency(t.amount)}
           </span>
           <div className="flex items-center gap-2">
@@ -1101,14 +1123,14 @@ export default function DashboardPage() {
               <button
                 onClick={() => handlePayExpenses([t])}
                 disabled={payingExpenses}
-                className={`flex items-center gap-1.5 ${compact ? 'px-2 py-1.5 sm:px-2.5' : 'px-3 py-2'} rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold disabled:opacity-50`}
+                className={`flex items-center gap-1.5 ${small ? 'px-2 py-1.5 sm:px-2.5' : 'px-3 py-2'} rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold disabled:opacity-50`}
               >
                 <CheckCircle2 className="w-4 h-4" /> Baixar
               </button>
             )}
             {(canEditTransactions || canDeleteTransactions) && <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-              {canEditTransactions && <button onClick={() => openEditModal(t)} aria-label={`Editar ${t.description}`} className={`${compact ? 'p-1.5' : 'p-2'} bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm`}><Edit className="w-4 h-4" /></button>}
-              {canDeleteTransactions && <button onClick={() => openDeleteModal(t)} aria-label={`Excluir ${t.description}`} className={`${compact ? 'p-1.5' : 'p-2'} bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm`}><Trash2 className="w-4 h-4" /></button>}
+              {canEditTransactions && <button onClick={() => openEditModal(t)} aria-label={`Editar ${t.description}`} className={`${small ? 'p-1.5' : 'p-2'} bg-slate-800 text-slate-300 rounded-lg hover:text-emerald-400 hover:bg-slate-700 transition-colors shadow-sm`}><Edit className="w-4 h-4" /></button>}
+              {canDeleteTransactions && <button onClick={() => openDeleteModal(t)} aria-label={`Excluir ${t.description}`} className={`${small ? 'p-1.5' : 'p-2'} bg-slate-800 text-slate-300 rounded-lg hover:text-rose-400 hover:bg-slate-700 transition-colors shadow-sm`}><Trash2 className="w-4 h-4" /></button>}
             </div>}
           </div>
         </div>
@@ -2230,6 +2252,27 @@ export default function DashboardPage() {
 
               {renderFilterBar(true)}
 
+              <div className="flex justify-end">
+                <div role="group" aria-label="Visualização das contas a pagar" className="inline-flex rounded-xl border border-slate-800 bg-slate-900 p-1">
+                  <button
+                    type="button"
+                    aria-pressed={payableView === 'LIST'}
+                    onClick={() => setPayableView('LIST')}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${payableView === 'LIST' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <FileText className="h-4 w-4" /> Lista
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={payableView === 'KANBAN'}
+                    onClick={() => setPayableView('KANBAN')}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${payableView === 'KANBAN' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <Layers className="h-4 w-4" /> Kanban
+                  </button>
+                </div>
+              </div>
+
               {canSettleTransactions && <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <label className="flex items-center gap-3 text-sm text-slate-300 cursor-pointer">
                   <input
@@ -2257,17 +2300,51 @@ export default function DashboardPage() {
                 </div>
               </div>}
 
-              <div className="w-full space-y-2">
-                {filteredPayableTransactions.length > 0 ? (
-                  filteredPayableTransactions.map(t => renderModernTransactionRow(t, false, true))
-                ) : (
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
-                    <CheckCircle2 className="w-12 h-12 text-slate-600 mx-auto" />
-                    <p className="text-white font-bold text-lg">Tudo limpo por aqui!</p>
-                    <p className="text-slate-400 text-sm">Nenhuma conta encontrada para estes filtros.</p>
-                  </div>
-                )}
-              </div>
+              {payableView === 'LIST' ? (
+                <div className="w-full space-y-2">
+                  {filteredPayableTransactions.length > 0 ? (
+                    filteredPayableTransactions.map(t => renderModernTransactionRow(t, false, true))
+                  ) : (
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3">
+                      <CheckCircle2 className="w-12 h-12 text-slate-600 mx-auto" />
+                      <p className="text-white font-bold text-lg">Tudo limpo por aqui!</p>
+                      <p className="text-slate-400 text-sm">Nenhuma conta encontrada para estes filtros.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                  {payableKanbanColumns.map(column => {
+                    const accentClasses = column.key === 'OVERDUE'
+                      ? 'border-rose-500/25 text-rose-400 bg-rose-500/10'
+                      : column.key === 'PENDING'
+                        ? 'border-amber-500/25 text-amber-400 bg-amber-500/10'
+                        : 'border-emerald-500/25 text-emerald-400 bg-emerald-500/10';
+                    const columnTotal = column.transactions.reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+
+                    return (
+                      <section key={column.key} aria-label={`${column.title}: ${column.transactions.length} lançamento(s)`} className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/50">
+                        <header className="flex items-center justify-between gap-2 border-b border-slate-800 p-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <h3 className="truncate text-sm font-bold text-white">{column.title}</h3>
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${accentClasses}`}>{column.transactions.length}</span>
+                          </div>
+                          <span className="shrink-0 text-xs font-semibold text-slate-400">{formatCurrency(columnTotal)}</span>
+                        </header>
+                        <div className="space-y-2 p-2">
+                          {column.transactions.length > 0 ? (
+                            column.transactions.map(transaction => renderModernTransactionRow(transaction, false, false, true))
+                          ) : (
+                            <p className="rounded-xl border border-dashed border-slate-800 px-3 py-6 text-center text-xs text-slate-500">
+                              Nenhum lançamento
+                            </p>
+                          )}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
