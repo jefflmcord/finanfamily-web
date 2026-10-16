@@ -608,6 +608,18 @@ export default function DashboardPage() {
     .filter(t => t.type === 'EXPENSE' && t.status === 'PAID')
     .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
   const yearExpensePending = Math.max(0, yearExpenseTotal - yearExpensePaid);
+  const creditCardExpensesByCategory = yearTransactions
+    .filter(t => t.type === 'EXPENSE' && (t.credit_card_id || t.payment_method === 'CARD'))
+    .reduce((totals: Record<string, number>, transaction) => {
+      const categoryName = transaction.category_name || 'Categoria Geral';
+      totals[categoryName] = (totals[categoryName] || 0) + Number(transaction.amount || 0);
+      return totals;
+    }, {});
+  const creditCardCategoryTotals = Object.entries(creditCardExpensesByCategory)
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((first, second) => second.amount - first.amount);
+  const creditCardExpenseTotal = creditCardCategoryTotals
+    .reduce((total, category) => total + category.amount, 0);
   const yearMoneyBurned = yearTransactions
     .filter(transaction => transaction.type === 'EXPENSE' && transaction.status === 'PAID')
     .reduce((total, transaction) => total + Math.max(
@@ -1675,6 +1687,48 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+
+              <section className="mt-5 bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950/20 border border-slate-800/90 rounded-3xl p-6 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-200">
+                        Gastos com cartão de crédito
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1">{dashboardPeriodLabel}</p>
+                    </div>
+                  </div>
+                  <p className="text-xl sm:text-2xl font-black text-sky-400 tracking-tight">
+                    {formatCurrency(creditCardExpenseTotal)}
+                  </p>
+                </div>
+
+                {creditCardCategoryTotals.length > 0 ? (
+                  <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {creditCardCategoryTotals.map(({ category, amount }) => (
+                      <div key={category} className="rounded-xl bg-slate-950/60 border border-slate-800/80 p-3">
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <span className="truncate text-slate-300">{category}</span>
+                          <strong className="shrink-0 text-slate-100">{formatCurrency(amount)}</strong>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                          <div
+                            className="h-full rounded-full bg-sky-500"
+                            style={{ width: `${creditCardExpenseTotal > 0 ? (amount / creditCardExpenseTotal) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-5 text-sm text-slate-500">
+                    Nenhum gasto com cartão de crédito neste período.
+                  </p>
+                )}
+              </section>
 
               {/* Indicador mensal de comprometimento financeiro */}
               <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl">
