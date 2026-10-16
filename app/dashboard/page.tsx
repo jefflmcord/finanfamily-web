@@ -70,6 +70,7 @@ export default function DashboardPage() {
   const [goalTitle, setGoalTitle] = useState('');
   const [goalTargetAmount, setGoalTargetAmount] = useState('');
   const [goalMonths, setGoalMonths] = useState('12');
+  const [goalStartDate, setGoalStartDate] = useState(() => new Date().toISOString().split('T')[0]); // Novo estado para a data inicial
   const [savingGoal, setSavingGoal] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -119,7 +120,7 @@ export default function DashboardPage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(isNaN(n) ? 0 : n);
   };
 
-  // Salvar Lançamento
+  // Salvar Lançamento Normal
   const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!txDescription || !txAmount) return;
@@ -138,7 +139,7 @@ export default function DashboardPage() {
 
     try {
       const payload = {
-        family_id: resolvedFamilyId, // Removido o Number() para respeitar o UUID
+        family_id: resolvedFamilyId,
         description: txDescription.trim(),
         amount: Number(txAmount.toString().replace(',', '.')),
         type: txType,
@@ -198,7 +199,7 @@ export default function DashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          family_id: resolvedFamilyId, // Removido o Number()
+          family_id: resolvedFamilyId,
           name: cardName,
           brand: cardBrand,
           total_limit: Number(cardLimit.toString().replace(',', '.')),
@@ -224,7 +225,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Cadastrar Objetivo/Meta diretamente nas Transações (Contas a Pagar)
+  // Cadastrar Objetivo/Meta diretamente nas Transações com Data Programada
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!goalTitle || !goalTargetAmount || !goalMonths) return;
@@ -246,21 +247,21 @@ export default function DashboardPage() {
     try {
       const totalVal = Number(goalTargetAmount.toString().replace(',', '.'));
       const monthsCount = Number(goalMonths) || 1;
-      const today = new Date().toISOString().split('T')[0];
 
       const invCategory = categories.find(c => c.name.toLowerCase() === 'investimento');
 
+      // Usa a data definida pelo utilizador em vez de "today"
       const payload = {
-        family_id: resolvedFamilyId, // Sem Number() para evitar erro de UUID
+        family_id: resolvedFamilyId,
         description: `Objetivo: ${goalTitle.trim()}`,
         amount: totalVal,
         type: 'EXPENSE',
         payment_method: 'BOLETO',
-        account_id: accounts.length > 0 ? accounts[0].id : null, // Sem Number()
+        account_id: accounts.length > 0 ? accounts[0].id : null,
         credit_card_id: null,
-        category_id: invCategory ? invCategory.id : (categories.length > 0 ? categories[0].id : null), // Sem Number()
-        transaction_date: today,
-        due_date: today,
+        category_id: invCategory ? invCategory.id : (categories.length > 0 ? categories[0].id : null),
+        transaction_date: goalStartDate,
+        due_date: goalStartDate, // A primeira parcela e as seguintes vão basear-se nesta data
         total_installments: monthsCount,
         start_installment: 1,
         status: 'PENDING'
@@ -279,6 +280,7 @@ export default function DashboardPage() {
         setGoalTitle('');
         setGoalTargetAmount('');
         setGoalMonths('12');
+        setGoalStartDate(new Date().toISOString().split('T')[0]); // Reseta a data para hoje
         await fetchData();
       } else {
         setError(data.error || 'Erro ao criar objetivo nas contas a pagar.');
@@ -446,7 +448,6 @@ export default function DashboardPage() {
                 <p className="text-slate-400 text-sm mt-1">Raio-x inteligente da saúde financeira da sua família.</p>
               </div>
 
-              {/* INDICADORES INTELIGENTES RESTAURADOS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-2">
                   <p className="text-xs uppercase font-bold text-slate-400">Saldo em Contas</p>
@@ -468,7 +469,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* GRÁFICOS E INDICADORES DE CATEGORIAS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
                   <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -523,7 +523,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* MÓDULO: INVESTIMENTOS (METAS & OBJETIVOS) */}
           {activeModule === 'investimentos' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
@@ -697,19 +696,25 @@ export default function DashboardPage() {
                 <input type="number" step="0.01" required placeholder="40000,00" value={goalTargetAmount} onChange={e => setGoalTargetAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Prazo em Meses (Parcelas)</label>
-                <input type="number" min="1" max="120" required value={goalMonths} onChange={e => setGoalMonths(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Prazo (Meses)</label>
+                  <input type="number" min="1" max="120" required value={goalMonths} onChange={e => setGoalMonths(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Data de Início</label>
+                  <input type="date" required value={goalStartDate} onChange={e => setGoalStartDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                </div>
               </div>
 
               {goalTargetAmount && goalMonths && Number(goalMonths) > 0 && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mt-2">
                   💡 Valor estimado por mês: {formatCurrency(Number(goalTargetAmount) / Number(goalMonths))} / mês
                 </div>
               )}
 
               <button type="submit" disabled={savingGoal} className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer">
-                {savingGoal ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-5 h-5" /> Criar Objetivo & Gerar Parcelas</>}
+                {savingGoal ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-5 h-5" /> Programar Investimento</>}
               </button>
             </form>
           </div>
