@@ -2,13 +2,17 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import CreditCardList from '@/components/CreditCardList';
 import { getCardPurchaseDueDate } from '@/lib/creditCardBilling';
 import {
   Wallet, Loader2, PlusCircle, CreditCard, Target, LayoutDashboard, LogOut, X, 
   CheckCircle2, FileText, DollarSign, Layers, PieChart as PieIcon, 
   BarChart3, Trophy, Edit, Trash2, AlertTriangle, Calendar, Filter, Circle, CheckCircle, AlertCircle,
-  TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Sparkles, Clock
+  TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Sparkles, Clock,
+  Printer, FileDown, FileSpreadsheet
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -654,6 +658,196 @@ export default function DashboardPage() {
   const payableExpenses = filteredTransactions('EXPENSE').filter(t => getTransactionStatus(t) !== 'PAID');
   const selectedPayableExpenses = payableExpenses.filter(t => selectedExpenseIds.includes(String(t.id)));
   const allPayableExpensesSelected = payableExpenses.length > 0 && selectedPayableExpenses.length === payableExpenses.length;
+
+  const getPayableReportRows = () => filteredTransactions('EXPENSE').map(transaction => {
+    const status = getTransactionStatus(transaction);
+    const paymentMethod = transaction.payment_method === 'CARD'
+      ? transaction.credit_card_name || 'Cartão de crédito'
+      : transaction.account_name || 'Não informada';
+
+    return {
+      dueDate: formatDatePT(transaction.due_date),
+      description: transaction.description || '',
+      category: transaction.category_name || 'Categoria Geral',
+      paymentMethod,
+      status: status === 'PAID' ? 'Pago' : status === 'OVERDUE' ? 'Atrasado' : 'Pendente',
+      amount: Number(transaction.amount || 0)
+    };
+  });
+
+  const getPayableReportFilters = () => {
+    const monthName = filterMonth === 'ALL'
+      ? 'Todos os meses'
+      : new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(2024, filterMonth - 1, 1));
+    const yearName = filterYear === 'ALL' ? 'Todos os anos' : String(filterYear);
+    const statusName = filterStatus === 'ALL'
+      ? 'Todos os status'
+      : filterStatus === 'PENDING' ? 'Pendente' : filterStatus === 'OVERDUE' ? 'Atrasado' : 'Pago';
+    return `${monthName} • ${yearName} • ${statusName}`;
+  };
+
+  const exportPayableExpensesToExcel = () => {
+    const rows = getPayableReportRows();
+    const total = rows.reduce((sum, row) => sum + row.amount, 0);
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ['FinanFamily — Contas a Pagar'],
+      [`Família: ${userName}`],
+      [`Filtros: ${getPayableReportFilters()}`],
+      [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
+      [],
+      ['Vencimento', 'Descrição', 'Categoria', 'Conta / Cartão', 'Status', 'Valor'],
+      ...rows.map(row => [
+        row.dueDate,
+        row.description,
+        row.category,
+        row.paymentMethod,
+        row.status,
+        row.amount
+      ]),
+      [],
+      ['', '', '', '', 'Total', total]
+    ]);
+    worksheet['!cols'] = [
+      { wch: 16 },
+      { wch: 36 },
+      { wch: 24 },
+      { wch: 24 },
+      { wch: 14 },
+      { wch: 18 }
+    ];
+    const dataRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:F1');
+    worksheet['!autofilter'] = {
+      ref: XLSX.utils.encode_range({ s: { r: 5, c: 0 }, e: { r: Math.max(5, 5 + rows.length), c: 5 } })
+    };
+    for (let row = 6; row <= dataRange.e.r; row += 1) {
+      const amountCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 5 })];
+      if (amountCell && typeof amountCell.v === 'number') amountCell.z = '"R$" #,##0.00';
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Contas a Pagar');
+    XLSX.writeFile(workbook, `contas-a-pagar-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const exportPayableExpensesToPdf = () => {
+    const rows = getPayableReportRows();
+    const total = rows.reduce((sum, row) => sum + row.amount, 0);
+    const document = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    document.setFontSize(18);
+    document.setTextColor(15, 23, 42);
+    document.text('Contas a Pagar', 14, 18);
+    document.setFontSize(9);
+    document.setTextColor(71, 85, 105);
+    document.text(`FinanFamily • ${userName}`, 14, 25);
+    document.text(`Filtros: ${getPayableReportFilters()}`, 14, 31);
+    document.text(`Gerado em ${new Date().toLocaleString('pt-BR')} • ${rows.length} lançamento(s)`, 14, 37);
+
+    autoTable(document, {
+      startY: 43,
+      head: [['Vencimento', 'Descrição', 'Categoria', 'Conta / Cartão', 'Status', 'Valor']],
+      body: rows.map(row => [
+        row.dueDate,
+        row.description,
+        row.category,
+        row.paymentMethod,
+        row.status,
+        formatCurrency(row.amount)
+      ]),
+      foot: [['', '', '', '', 'Total', formatCurrency(total)]],
+      showFoot: 'lastPage',
+      styles: { fontSize: 8, cellPadding: 3, textColor: [30, 41, 59] },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] },
+      footStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 1: { cellWidth: 68 }, 2: { cellWidth: 42 }, 3: { cellWidth: 42 }, 5: { halign: 'right' } },
+      didDrawPage: () => {
+        document.setFontSize(8);
+        document.setTextColor(100, 116, 139);
+        document.text(
+          `Página ${document.getNumberOfPages()}`,
+          document.internal.pageSize.getWidth() - 14,
+          document.internal.pageSize.getHeight() - 7,
+          { align: 'right' }
+        );
+      }
+    });
+
+    document.save(`contas-a-pagar-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const printPayableExpenses = () => {
+    const rows = getPayableReportRows();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      setError('Permita pop-ups para imprimir a listagem de contas a pagar.');
+      return;
+    }
+    printWindow.opener = null;
+
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[character] || character);
+    const total = rows.reduce((sum, row) => sum + row.amount, 0);
+    const tableRows = rows.map(row => `
+      <tr>
+        <td>${escapeHtml(row.dueDate)}</td>
+        <td>${escapeHtml(row.description)}</td>
+        <td>${escapeHtml(row.category)}</td>
+        <td>${escapeHtml(row.paymentMethod)}</td>
+        <td>${escapeHtml(row.status)}</td>
+        <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`<!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Contas a Pagar - FinanFamily</title>
+          <style>
+            @page { size: A4 landscape; margin: 14mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; color: #172033; font: 12px Arial, sans-serif; }
+            header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 14px; border-bottom: 2px solid #10b981; }
+            h1 { margin: 0 0 5px; font-size: 22px; }
+            p { margin: 3px 0; color: #64748b; }
+            .brand { font-weight: 700; color: #059669; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th { background: #f1f5f9; text-align: left; color: #334155; }
+            th, td { padding: 8px 9px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+            tbody tr:nth-child(even) { background: #f8fafc; }
+            .amount { text-align: right; white-space: nowrap; }
+            tfoot td { font-weight: 700; border-top: 2px solid #94a3b8; }
+            @media print { thead { display: table-header-group; } tr { break-inside: avoid; } }
+          </style>
+        </head>
+        <body>
+          <header>
+            <div>
+              <h1>Contas a Pagar</h1>
+              <p>${escapeHtml(getPayableReportFilters())}</p>
+              <p>${rows.length} lançamento(s) • Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>
+            </div>
+            <div class="brand">FinanFamily<br>${escapeHtml(userName)}</div>
+          </header>
+          <table>
+            <thead><tr><th>Vencimento</th><th>Descrição</th><th>Categoria</th><th>Conta / Cartão</th><th>Status</th><th class="amount">Valor</th></tr></thead>
+            <tbody>${tableRows || '<tr><td colspan="6">Nenhum lançamento encontrado para estes filtros.</td></tr>'}</tbody>
+            <tfoot><tr><td colspan="5" class="amount">Total</td><td class="amount">${escapeHtml(formatCurrency(total))}</td></tr></tfoot>
+          </table>
+        </body>
+      </html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
 
   const handleExpenseSelection = (expenseId: string, selected: boolean) => {
     setSelectedExpenseIds(ids => selected
@@ -1649,14 +1843,37 @@ export default function DashboardPage() {
           {/* NOVO LAYOUT MODERNIZADO: CONTAS A PAGAR */}
           {activeModule === 'pagar' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>
                   <h2 className="text-2xl font-extrabold text-white">Contas a Pagar</h2>
                   <p className="text-slate-400 text-sm mt-1">Controle e organize as suas despesas.</p>
                 </div>
-                <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2">
-                  <PlusCircle className="w-4 h-4" /> Adicionar
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={printPayableExpenses}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
+                  >
+                    <Printer className="w-4 h-4" /> Imprimir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportPayableExpensesToPdf}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
+                  >
+                    <FileDown className="w-4 h-4" /> Exportar PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportPayableExpensesToExcel}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 px-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" /> Exportar XLSX
+                  </button>
+                  <button onClick={() => { setTxType('EXPENSE'); setIsTxModalOpen(true); }} className="bg-emerald-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2">
+                    <PlusCircle className="w-4 h-4" /> Adicionar
+                  </button>
+                </div>
               </div>
 
               {renderFilterBar()}
