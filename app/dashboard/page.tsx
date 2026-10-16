@@ -801,8 +801,9 @@ export default function DashboardPage() {
 
   const getPayableReportRows = () => filteredTransactions('EXPENSE').map(transaction => {
     const status = getTransactionStatus(transaction);
-    const paymentMethod = transaction.payment_method === 'CARD'
-      ? transaction.credit_card_name || 'Cartão de crédito'
+    const linkedCard = creditCards.find(card => String(card.id) === String(transaction.credit_card_id));
+    const paymentMethod = transaction.credit_card_id || transaction.payment_method === 'CARD'
+      ? transaction.credit_card_name || linkedCard?.name || 'Cartão de crédito'
       : transaction.account_name || 'Não informada';
 
     return {
