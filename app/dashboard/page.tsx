@@ -2257,7 +2257,7 @@ export default function DashboardPage() {
                 </div>
               </div>}
 
-              <div className="max-w-5xl space-y-2">
+              <div className="w-full space-y-2">
                 {filteredPayableTransactions.length > 0 ? (
                   filteredPayableTransactions.map(t => renderModernTransactionRow(t, false, true))
                 ) : (
