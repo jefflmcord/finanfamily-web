@@ -52,6 +52,7 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
   const [isInstallment, setIsInstallment] = useState(false);
   const [totalInstallments, setTotalInstallments] = useState(1);
   const [startInstallment, setStartInstallment] = useState(1);
+  const [amountMode, setAmountMode] = useState<'TOTAL' | 'INSTALLMENT'>('TOTAL');
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCardItem[]>([]);
@@ -64,7 +65,8 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
 
   useEffect(() => {
     if (isOpen) {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       setTransactionDate(today);
       setDueDate(today);
       setError(null);
@@ -124,14 +126,18 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
     if (card.due_day < card.closing_day && txDay < card.closing_day) offset = 1;
     else if (card.due_day < card.closing_day && txDay >= card.closing_day) offset = 2;
 
-    const targetDate = new Date(txYear, txMonth + offset, card.due_day);
+    const targetDate = new Date(txYear, txMonth + offset, 1);
+    const lastDayOfDueMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
+    targetDate.setDate(Math.min(card.due_day, lastDayOfDueMonth));
     const formattedDue = `${String(targetDate.getDate()).padStart(2, '0')}/${String(targetDate.getMonth() + 1).padStart(2, '0')}/${targetDate.getFullYear()}`;
+    const estimatedDueISO = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
     const isClosed = txDay >= card.closing_day;
 
     return {
       closingDay: card.closing_day,
       dueDay: card.due_day,
       estimatedDue: formattedDue,
+      estimatedDueISO,
       isClosed
     };
   }, [paymentMethod, type, creditCardId, transactionDate, creditCards]);
@@ -149,6 +155,9 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
 
       const totalInst = isInstallment ? Number(totalInstallments) : 1;
       const startInst = isInstallment ? Number(startInstallment) : 1;
+      const totalAmount = isInstallment && amountMode === 'INSTALLMENT'
+        ? Math.round(parsedAmount * totalInst * 100) / 100
+        : parsedAmount;
 
       if (startInst > totalInst) {
         throw new Error('A parcela inicial não pode ser maior que o total de parcelas.');
@@ -157,10 +166,9 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
       const payload = {
         family_id: familyId,
         description,
-        amount: parsedAmount,
-        installment_amount: parsedAmount,
+        amount: totalAmount,
         transaction_date: transactionDate,
-        due_date: dueDate,
+        due_date: selectedCardInfo?.estimatedDueISO || dueDate,
         type,
         category_id: categoryId || null,
         payment_method: type === 'INCOME' ? 'ACCOUNT' : paymentMethod,
@@ -186,6 +194,7 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
       setIsInstallment(false);
       setTotalInstallments(1);
       setStartInstallment(1);
+      setAmountMode('TOTAL');
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -267,7 +276,7 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">
-                {isInstallment ? 'Valor da Parcela (R$)' : 'Valor Total (R$)'}
+                {isInstallment && amountMode === 'INSTALLMENT' ? 'Valor da Parcela (R$)' : 'Valor Total (R$)'}
               </label>
               <input
                 type="text"
@@ -468,6 +477,40 @@ export default function NewTransactionModal({ isOpen, onClose, onSuccess }: NewT
 
             {isInstallment && (
               <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+                <fieldset>
+                  <legend className="block text-xs font-medium text-slate-400 mb-2">O valor informado representa</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-800 p-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="amountMode"
+                        value="TOTAL"
+                        checked={amountMode === 'TOTAL'}
+                        onChange={() => setAmountMode('TOTAL')}
+                        className="text-emerald-500 focus:ring-emerald-500"
+                      />
+                      O total da compra
+                    </label>
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-800 p-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="amountMode"
+                        value="INSTALLMENT"
+                        checked={amountMode === 'INSTALLMENT'}
+                        onChange={() => setAmountMode('INSTALLMENT')}
+                        className="text-emerald-500 focus:ring-emerald-500"
+                      />
+                      O valor de cada parcela
+                    </label>
+                  </div>
+                  {Number(amount.replace(',', '.')) > 0 && (
+                    <p className="mt-2 text-[11px] text-slate-400">
+                      {amountMode === 'INSTALLMENT'
+                        ? `Serão lançadas ${totalInstallments - startInstallment + 1} parcelas de R$ ${Number(amount.replace(',', '.')).toFixed(2).replace('.', ',')}.`
+                        : `Cada parcela será de R$ ${(Number(amount.replace(',', '.')) / totalInstallments).toFixed(2).replace('.', ',')}.`}
+                    </p>
+                  )}
+                </fieldset>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">Total de Parcelas</label>
