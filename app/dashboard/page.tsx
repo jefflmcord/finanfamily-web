@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -1885,6 +1886,15 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </nav>
+              {userEmail.toLowerCase() === 'jeffersonluismattosocordeiro@gmail.com' && (
+                <Link
+                  href="/relatorio-interno"
+                  onClick={() => setSettingsOpen(false)}
+                  className="block rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-center text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/20"
+                >
+                  Relatório interno de tenants
+                </Link>
+              )}
 
               {settingsSection === 'profile' && (
                 <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
