@@ -78,6 +78,8 @@ export default function DashboardPage() {
   const [txTotalInstallments, setTxTotalInstallments] = useState('1');
   const [txStartInstallment, setTxStartInstallment] = useState('1');
   const [txAmountMode, setTxAmountMode] = useState<'TOTAL' | 'INSTALLMENT'>('TOTAL');
+  const [txRepeatMonthly, setTxRepeatMonthly] = useState(false);
+  const [txRecurrenceMonths, setTxRecurrenceMonths] = useState('2');
 
   // Modal Cartão & Objetivos
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -327,7 +329,12 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!canCreateTransactions) return;
     if (!txDescription || !txAmount) return;
-    const totalInstallments = Number(txTotalInstallments) || 1;
+    const recurrenceMonths = txRepeatMonthly ? Number(txRecurrenceMonths) : 1;
+    if (txRepeatMonthly && (!Number.isInteger(recurrenceMonths) || recurrenceMonths < 2 || recurrenceMonths > 120)) {
+      setError('Informe uma recorrência entre 2 e 120 meses.');
+      return;
+    }
+    const totalInstallments = txRepeatMonthly ? 1 : Number(txTotalInstallments) || 1;
     const startInstallment = Number(txStartInstallment) || 1;
     if (!Number.isInteger(totalInstallments) || totalInstallments < 1 || !Number.isInteger(startInstallment) || startInstallment < 1 || startInstallment > totalInstallments) {
       setError('Informe um intervalo válido de parcelas.');
@@ -360,7 +367,7 @@ export default function DashboardPage() {
       ? getCardPurchaseDueDate(txTransactionDate, Number(cardForTransaction.closing_day), Number(cardForTransaction.due_day))
       : txDueDate;
     const enteredAmount = Number(txAmount.toString().replace(',', '.'));
-    const transactionAmount = totalInstallments > 1 && txAmountMode === 'INSTALLMENT'
+    const transactionAmount = !txRepeatMonthly && totalInstallments > 1 && txAmountMode === 'INSTALLMENT'
       ? Math.round(enteredAmount * totalInstallments * 100) / 100
       : enteredAmount;
 
@@ -376,8 +383,9 @@ export default function DashboardPage() {
         category_id: txCategoryId ? txCategoryId : null,
         transaction_date: txTransactionDate,
         due_date: transactionDueDate,
-        total_installments: Number(txTotalInstallments) || 1,
-        start_installment: Number(txStartInstallment) || 1,
+        total_installments: totalInstallments,
+        start_installment: txRepeatMonthly ? 1 : Number(txStartInstallment) || 1,
+        recurrence_months: recurrenceMonths,
         status: 'PENDING'
       };
 
@@ -395,6 +403,8 @@ export default function DashboardPage() {
         setTxTotalInstallments('1');
         setTxStartInstallment('1');
         setTxAmountMode('TOTAL');
+        setTxRepeatMonthly(false);
+        setTxRecurrenceMonths('2');
         await fetchData();
       } else {
         const data = await res.json();
@@ -2863,7 +2873,7 @@ export default function DashboardPage() {
             <form onSubmit={handleSaveTransaction} className="space-y-4">
               <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
                 <button type="button" onClick={() => { setTxType('EXPENSE'); setTxCategoryId(''); }} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'EXPENSE' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}>Contas a Pagar</button>
-                <button type="button" onClick={() => { setTxType('INCOME'); setTxCategoryId(''); }} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber</button>
+                <button type="button" onClick={() => { setTxType('INCOME'); setTxCategoryId(''); setTxRepeatMonthly(false); }} className={`py-2 rounded-lg font-bold text-sm cursor-pointer ${txType === 'INCOME' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>Contas a Receber</button>
               </div>
               <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Descrição</label><input type="text" required placeholder="Ex: Aluguel, Supermercado..." value={txDescription} onChange={e => setTxDescription(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
               <div>
@@ -2881,7 +2891,7 @@ export default function DashboardPage() {
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">{Number(txTotalInstallments) > 1 && txAmountMode === 'INSTALLMENT' ? 'Valor de Cada Parcela (R$)' : 'Valor Total (R$)'}</label><input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
+                <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">{txRepeatMonthly ? 'Valor de cada mês (R$)' : Number(txTotalInstallments) > 1 && txAmountMode === 'INSTALLMENT' ? 'Valor de Cada Parcela (R$)' : 'Valor Total (R$)'}</label><input type="number" step="0.01" required placeholder="0,00" value={txAmount} onChange={e => setTxAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Forma Pagamento</label>
                   <select value={txPaymentMethod} onChange={e => setTxPaymentMethod(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"><option value="BOLETO">Boleto / Pix / Dinheiro</option><option value="CARD">Cartão de Crédito</option></select>
@@ -2892,11 +2902,49 @@ export default function DashboardPage() {
               ) : (
                 <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Conta Bancária</label><select value={txAccountId} onChange={e => setTxAccountId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"><option value="">Selecione a conta...</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
               )}
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Total de Parcelas</label><input type="number" min="1" max="48" value={txTotalInstallments} onChange={e => setTxTotalInstallments(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
-                <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Iniciar da Parcela</label><input type="number" min="1" max="48" value={txStartInstallment} onChange={e => setTxStartInstallment(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
-              </div>
-              {Number(txTotalInstallments) > 1 && (
+              {txType === 'EXPENSE' && (
+                <section className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={txRepeatMonthly}
+                      onChange={event => {
+                        setTxRepeatMonthly(event.target.checked);
+                        if (event.target.checked) {
+                          setTxTotalInstallments('1');
+                          setTxStartInstallment('1');
+                          setTxAmountMode('TOTAL');
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    Repetir esta conta mensalmente
+                  </label>
+                  {txRepeatMonthly ? (
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Quantidade de meses</label>
+                      <input
+                        type="number"
+                        min="2"
+                        max="120"
+                        required
+                        value={txRecurrenceMonths}
+                        onChange={event => setTxRecurrenceMonths(event.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white"
+                      />
+                      <p className="mt-2 text-xs text-slate-400">
+                        Serão criadas {txRecurrenceMonths || 0} contas a pagar mensais, cada uma no valor de {formatCurrency(Number(txAmount) || 0)}.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Total de Parcelas</label><input type="number" min="1" max="48" value={txTotalInstallments} onChange={e => setTxTotalInstallments(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
+                      <div><label className="block text-xs font-bold uppercase text-slate-400 mb-1">Iniciar da Parcela</label><input type="number" min="1" max="48" value={txStartInstallment} onChange={e => setTxStartInstallment(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white" /></div>
+                    </div>
+                  )}
+                </section>
+              )}
+              {!txRepeatMonthly && Number(txTotalInstallments) > 1 && (
                 <fieldset className="rounded-xl border border-slate-800 bg-slate-950 p-3">
                   <legend className="px-1 text-xs font-bold uppercase text-slate-400">O valor informado é</legend>
                   <div className="grid grid-cols-2 gap-2">
