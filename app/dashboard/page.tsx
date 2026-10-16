@@ -81,6 +81,7 @@ export default function DashboardPage() {
   const [txRepeatMonthly, setTxRepeatMonthly] = useState(false);
   const [txRecurrenceMonths, setTxRecurrenceMonths] = useState('2');
   const [hoveredCreditCardCategory, setHoveredCreditCardCategory] = useState<string | null>(null);
+  const [selectedCreditCardCategory, setSelectedCreditCardCategory] = useState<string | null>(null);
 
   // Modal Cartão & Objetivos
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -1760,8 +1761,15 @@ export default function DashboardPage() {
                           const accessibleLabel = `${category}: ${formatCurrency(amount)}, ${percentage.toFixed(1)}%`;
                           const interactionProps = {
                             onMouseEnter: () => setHoveredCreditCardCategory(category),
+                            onClick: () => setSelectedCreditCardCategory(category),
                             onFocus: () => setHoveredCreditCardCategory(category),
                             onBlur: () => setHoveredCreditCardCategory(null),
+                            onKeyDown: (event: React.KeyboardEvent<SVGElement>) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                setSelectedCreditCardCategory(category);
+                              }
+                            },
                             tabIndex: 0,
                             role: 'button' as const,
                             'aria-label': accessibleLabel,
@@ -1800,6 +1808,94 @@ export default function DashboardPage() {
                   </p>
                 )}
               </section>
+              {selectedCreditCardCategory && (() => {
+                const categoryTransactions = yearTransactions
+                  .filter(transaction =>
+                    transaction.type === 'EXPENSE' &&
+                    Boolean(transaction.credit_card_id || transaction.payment_method === 'CARD') &&
+                    (transaction.category_name || 'Categoria Geral') === selectedCreditCardCategory
+                  )
+                  .sort((first, second) =>
+                    String(second.transaction_date || second.due_date || '')
+                      .localeCompare(String(first.transaction_date || first.due_date || ''))
+                  );
+                const categoryTotal = categoryTransactions.reduce(
+                  (total, transaction) => total + Number(transaction.amount || 0),
+                  0
+                );
+
+                return (
+                  <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+                    onMouseDown={event => {
+                      if (event.target === event.currentTarget) setSelectedCreditCardCategory(null);
+                    }}
+                  >
+                    <section
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="credit-card-category-dialog-title"
+                      className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl sm:p-6"
+                    >
+                      <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+                        <div>
+                          <h2 id="credit-card-category-dialog-title" className="text-lg font-bold text-white">
+                            Gastos com cartão • {selectedCreditCardCategory}
+                          </h2>
+                          <p className="mt-1 text-xs text-slate-400">{dashboardPeriodLabel}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCreditCardCategory(null)}
+                          aria-label="Fechar lançamentos da categoria"
+                          className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 py-4">
+                        <span className="text-sm text-slate-400">{categoryTransactions.length} lançamento(s)</span>
+                        <strong className="text-lg font-black text-sky-400">{formatCurrency(categoryTotal)}</strong>
+                      </div>
+
+                      <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+                        {categoryTransactions.length > 0 ? categoryTransactions.map(transaction => {
+                          const linkedCard = creditCards.find(card =>
+                            String(card.id) === String(transaction.credit_card_id)
+                          );
+                          return (
+                            <article
+                              key={transaction.id}
+                              className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-200">
+                                  {transaction.description}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {formatDatePT(transaction.transaction_date || transaction.due_date)}
+                                  {linkedCard ? ` • ${linkedCard.name}` : ''}
+                                  {transaction.installment_number && transaction.total_installments > 1
+                                    ? ` • Parcela ${transaction.installment_number}/${transaction.total_installments}`
+                                    : ''}
+                                </p>
+                              </div>
+                              <strong className="shrink-0 text-sm text-slate-100">
+                                {formatCurrency(transaction.amount)}
+                              </strong>
+                            </article>
+                          );
+                        }) : (
+                          <p className="py-8 text-center text-sm text-slate-500">
+                            Não há lançamentos para esta categoria no período selecionado.
+                          </p>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                );
+              })()}
 
               {/* Indicador mensal de comprometimento financeiro */}
               <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl">
