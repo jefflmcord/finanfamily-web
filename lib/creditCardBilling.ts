@@ -44,15 +44,22 @@ export function getCurrentCardBillingPeriod(
 ): CardBillingPeriod {
   const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
   const currentMonthClosing = getClosingDate(today.getFullYear(), today.getMonth(), closingDay);
-  const closingDate = today >= currentMonthClosing
+  let closingDate = today >= currentMonthClosing
     ? currentMonthClosing
     : getClosingDate(today.getFullYear(), today.getMonth() - 1, closingDay);
+  let dueDate = getDueDate(closingDate, closingDay, dueDay);
+
+  if (today > dueDate) {
+    closingDate = getClosingDate(closingDate.getFullYear(), closingDate.getMonth() + 1, closingDay);
+    dueDate = getDueDate(closingDate, closingDay, dueDay);
+  }
+
   const previousClosing = getClosingDate(closingDate.getFullYear(), closingDate.getMonth() - 1, closingDay);
   const periodStart = new Date(previousClosing.getFullYear(), previousClosing.getMonth(), previousClosing.getDate() + 1);
 
   return {
     periodStart: toDateKey(periodStart),
     closingDate: toDateKey(closingDate),
-    dueDate: toDateKey(getDueDate(closingDate, closingDay, dueDay)),
+    dueDate: toDateKey(dueDate),
   };
 }
