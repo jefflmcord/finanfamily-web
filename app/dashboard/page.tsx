@@ -857,7 +857,7 @@ export default function DashboardPage() {
                     <span>Painel Inteligente • Exercício {dashboardYear}</span>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                    Olá, {userName}! 👋
+                    Olá, {userName}!
                   </h1>
                   <p className="text-slate-400 text-sm">
                     Acompanhe a evolução mês a mês das receitas, despesas e indicadores da família.
