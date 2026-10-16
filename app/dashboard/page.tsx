@@ -16,7 +16,7 @@ import {
   CheckCircle2, FileText, DollarSign, Layers, PieChart as PieIcon, 
   BarChart3, Trophy, Edit, Trash2, AlertTriangle, Calendar, Filter, Circle, CheckCircle, AlertCircle,
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Sparkles, Clock,
-  Printer, FileDown, FileSpreadsheet, Menu, Plus, User, Users
+  Printer, FileDown, FileSpreadsheet, Menu, Plus, User, Users, Share2
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -42,6 +42,11 @@ export default function DashboardPage() {
   // Filtros do Dashboard Inicial (Visão Geral)
   const [dashboardYear, setDashboardYear] = useState<number | 'ALL'>(new Date().getFullYear());
   const [dashboardMonth, setDashboardMonth] = useState<number | 'ALL'>('ALL');
+  const [monthlySummaryPeriod, setMonthlySummaryPeriod] = useState(() => {
+    const today = new Date();
+    return { year: today.getFullYear(), month: today.getMonth() + 1 };
+  });
+  const [monthlySummaryMessage, setMonthlySummaryMessage] = useState('');
   const [chartStatusMode, setChartStatusMode] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL');
   const [selectedChartMonth, setSelectedChartMonth] = useState<number>(new Date().getMonth() + 1);
 
@@ -753,6 +758,139 @@ export default function DashboardPage() {
   const yearCommitmentRate = yearIncomeTotal > 0 ? Math.min(100, (yearExpenseTotal / yearIncomeTotal) * 100) : 0;
   const yearIncomeReceivedRate = yearIncomeTotal > 0 ? Math.min(100, (yearIncomePaid / yearIncomeTotal) * 100) : 0;
   const yearExpensePaidRate = yearExpenseTotal > 0 ? Math.min(100, (yearExpensePaid / yearExpenseTotal) * 100) : 0;
+
+  const monthlySummaryTransactions = transactions.filter(transaction => {
+    const yearMonth = getTxYearMonth(transaction);
+    return yearMonth?.year === monthlySummaryPeriod.year &&
+      yearMonth.month === monthlySummaryPeriod.month;
+  });
+  const monthlySummaryIncomeTransactions = monthlySummaryTransactions.filter(transaction => transaction.type === 'INCOME');
+  const monthlySummaryExpenseTransactions = monthlySummaryTransactions.filter(transaction => transaction.type === 'EXPENSE');
+  const monthlySummaryIncome = monthlySummaryIncomeTransactions.reduce(
+    (total, transaction) => total + Number(transaction.amount || 0),
+    0
+  );
+  const monthlySummaryReceived = monthlySummaryIncomeTransactions
+    .filter(transaction => transaction.status === 'PAID')
+    .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+  const monthlySummaryExpenses = monthlySummaryExpenseTransactions.reduce(
+    (total, transaction) => total + Number(transaction.amount || 0),
+    0
+  );
+  const monthlySummaryPaidExpenses = monthlySummaryExpenseTransactions
+    .filter(transaction => transaction.status === 'PAID')
+    .reduce((total, transaction) => total + Number(transaction.paid_amount ?? transaction.amount ?? 0), 0);
+  const monthlySummaryPendingIncome = Math.max(0, monthlySummaryIncome - monthlySummaryReceived);
+  const monthlySummaryPendingExpenses = Math.max(0, monthlySummaryExpenses - monthlySummaryExpenseTransactions
+    .filter(transaction => transaction.status === 'PAID')
+    .reduce((total, transaction) => total + Number(transaction.amount || 0), 0));
+  const monthlySummaryOverdueTransactions = monthlySummaryTransactions.filter(
+    transaction => transaction.status !== 'PAID' && getTransactionStatus(transaction) === 'OVERDUE'
+  );
+  const monthlySummaryOverdue = monthlySummaryOverdueTransactions.reduce(
+    (total, transaction) => total + Number(transaction.amount || 0),
+    0
+  );
+  const monthlySummaryNetProjected = monthlySummaryIncome - monthlySummaryExpenses;
+  const monthlySummaryNetRealized = monthlySummaryReceived - monthlySummaryPaidExpenses;
+  const monthlySummaryTopCategories = Object.entries(monthlySummaryExpenseTransactions.reduce(
+    (totals: Record<string, number>, transaction) => {
+      const category = transaction.category_name || 'Categoria Geral';
+      totals[category] = (totals[category] || 0) + Number(transaction.amount || 0);
+      return totals;
+    },
+    {}
+  )).sort((first, second) => second[1] - first[1]).slice(0, 3);
+  const monthlySummaryLabel = `${MONTH_FULL_NAMES[monthlySummaryPeriod.month - 1]} ${monthlySummaryPeriod.year}`;
+  const monthlySummaryShareText = [
+    `FinanFamily — Resumo mensal da família`,
+    `Família: ${userName}`,
+    `Período: ${monthlySummaryLabel}`,
+    '',
+    `Receitas: ${formatCurrency(monthlySummaryIncome)} (recebido: ${formatCurrency(monthlySummaryReceived)}; a receber: ${formatCurrency(monthlySummaryPendingIncome)})`,
+    `Despesas: ${formatCurrency(monthlySummaryExpenses)} (pagas: ${formatCurrency(monthlySummaryPaidExpenses)}; em aberto: ${formatCurrency(monthlySummaryPendingExpenses)})`,
+    `Resultado previsto: ${formatCurrency(monthlySummaryNetProjected)}`,
+    `Resultado realizado: ${formatCurrency(monthlySummaryNetRealized)}`,
+    `Lançamentos em atraso: ${monthlySummaryOverdueTransactions.length} (${formatCurrency(monthlySummaryOverdue)})`,
+    ...(monthlySummaryTopCategories.length > 0
+      ? ['', 'Principais categorias de despesas:', ...monthlySummaryTopCategories.map(([category, amount]) => `• ${category}: ${formatCurrency(amount)}`)]
+      : [])
+  ].join('\n');
+
+  const changeMonthlySummaryPeriod = (monthOffset: number) => {
+    setMonthlySummaryPeriod(current => {
+      const nextMonth = new Date(current.year, current.month - 1 + monthOffset, 1);
+      return { year: nextMonth.getFullYear(), month: nextMonth.getMonth() + 1 };
+    });
+    setMonthlySummaryMessage('');
+  };
+
+  const exportMonthlySummaryPdf = () => {
+    const document = new jsPDF();
+    document.setFontSize(18);
+    document.setTextColor(15, 23, 42);
+    document.text('Resumo mensal da família', 14, 18);
+    document.setFontSize(10);
+    document.setTextColor(71, 85, 105);
+    document.text(`FinanFamily • ${userName} • ${monthlySummaryLabel}`, 14, 26);
+    document.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, 14, 32);
+
+    autoTable(document, {
+      startY: 39,
+      head: [['Indicador', 'Valor']],
+      body: [
+        ['Receitas previstas', formatCurrency(monthlySummaryIncome)],
+        ['Receitas recebidas', formatCurrency(monthlySummaryReceived)],
+        ['A receber', formatCurrency(monthlySummaryPendingIncome)],
+        ['Despesas previstas', formatCurrency(monthlySummaryExpenses)],
+        ['Despesas pagas', formatCurrency(monthlySummaryPaidExpenses)],
+        ['Despesas em aberto', formatCurrency(monthlySummaryPendingExpenses)],
+        ['Resultado previsto', formatCurrency(monthlySummaryNetProjected)],
+        ['Resultado realizado', formatCurrency(monthlySummaryNetRealized)],
+        [`Em atraso (${monthlySummaryOverdueTransactions.length} lançamento(s))`, formatCurrency(monthlySummaryOverdue)]
+      ],
+      styles: { fontSize: 9, cellPadding: 3, textColor: [30, 41, 59] },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 1: { halign: 'right', cellWidth: 55 } }
+    });
+
+    autoTable(document, {
+      startY: 145,
+      head: [['Principais categorias de despesas', 'Total']],
+      body: monthlySummaryTopCategories.length > 0
+        ? monthlySummaryTopCategories.map(([category, amount]) => [category, formatCurrency(amount)])
+        : [['Nenhuma despesa registrada no período', '—']],
+      styles: { fontSize: 9, cellPadding: 3, textColor: [30, 41, 59] },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 1: { halign: 'right', cellWidth: 55 } }
+    });
+
+    document.save(`resumo-familia-${monthlySummaryPeriod.year}-${String(monthlySummaryPeriod.month).padStart(2, '0')}.pdf`);
+  };
+
+  const shareMonthlySummary = async () => {
+    setMonthlySummaryMessage('');
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Resumo mensal da família — ${monthlySummaryLabel}`,
+          text: monthlySummaryShareText
+        });
+        setMonthlySummaryMessage('Resumo compartilhado.');
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(monthlySummaryShareText);
+        setMonthlySummaryMessage('Resumo copiado. Você já pode colá-lo para compartilhar.');
+      } else {
+        setMonthlySummaryMessage('O compartilhamento não está disponível neste navegador. Baixe o PDF para enviar o resumo.');
+      }
+    } catch (shareError) {
+      if (shareError instanceof Error && shareError.name === 'AbortError') return;
+      console.error('Não foi possível compartilhar o resumo mensal:', shareError);
+      setMonthlySummaryMessage('Não foi possível compartilhar o resumo. Tente baixar o PDF.');
+    }
+  };
 
   let runningCumulativeBalance = 0;
   const monthlyChartData = MONTH_SHORT_NAMES.map((shortLabel, index) => {
@@ -1799,6 +1937,133 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+
+              <section className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20 border border-slate-800/90 rounded-3xl p-6 shadow-xl">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-100">
+                          Resumo mensal da família
+                        </h2>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Um fechamento compacto das receitas, despesas e resultado do mês.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1">
+                      <button
+                        type="button"
+                        onClick={() => changeMonthlySummaryPeriod(-1)}
+                        aria-label="Mês anterior no resumo"
+                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="min-w-28 px-2 text-center text-sm font-bold capitalize text-slate-200">
+                        {monthlySummaryLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => changeMonthlySummaryPeriod(1)}
+                        aria-label="Próximo mês no resumo"
+                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={exportMonthlySummaryPdf}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-xs font-bold text-slate-200 transition-colors hover:bg-slate-700"
+                    >
+                      <FileDown className="h-4 w-4" />
+                      Baixar PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={shareMonthlySummary}
+                      className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2.5 text-xs font-bold text-slate-950 transition-colors hover:bg-emerald-400"
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Compartilhar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Receitas previstas</p>
+                    <strong className="mt-1 block text-lg font-black text-emerald-400">{formatCurrency(monthlySummaryIncome)}</strong>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {formatCurrency(monthlySummaryReceived)} recebidas • {formatCurrency(monthlySummaryPendingIncome)} a receber
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Despesas previstas</p>
+                    <strong className="mt-1 block text-lg font-black text-rose-400">{formatCurrency(monthlySummaryExpenses)}</strong>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {formatCurrency(monthlySummaryPaidExpenses)} pagas • {formatCurrency(monthlySummaryPendingExpenses)} em aberto
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Resultado previsto</p>
+                    <strong className={`mt-1 block text-lg font-black ${monthlySummaryNetProjected >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {formatCurrency(monthlySummaryNetProjected)}
+                    </strong>
+                    <p className="mt-1 text-xs text-slate-500">Receitas previstas menos despesas previstas</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Resultado realizado</p>
+                    <strong className={`mt-1 block text-lg font-black ${monthlySummaryNetRealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {formatCurrency(monthlySummaryNetRealized)}
+                    </strong>
+                    <p className="mt-1 text-xs text-slate-500">Recebimentos menos valores efetivamente pagos</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-800 pt-4 md:grid-cols-2">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400">Principais despesas por categoria</h3>
+                    {monthlySummaryTopCategories.length > 0 ? (
+                      <ol className="mt-2 space-y-2">
+                        {monthlySummaryTopCategories.map(([category, amount], index) => (
+                          <li key={category} className="flex items-center justify-between gap-3 text-sm">
+                            <span className="truncate text-slate-300">{index + 1}. {category}</span>
+                            <strong className="shrink-0 text-slate-100">{formatCurrency(amount)}</strong>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="mt-2 text-sm text-slate-500">Nenhuma despesa registrada neste mês.</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col justify-between gap-3 md:items-end md:text-right">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400">Atenção</h3>
+                      <p className="mt-2 text-sm text-slate-300">
+                        {monthlySummaryOverdueTransactions.length > 0
+                          ? `${monthlySummaryOverdueTransactions.length} lançamento(s) em atraso, totalizando ${formatCurrency(monthlySummaryOverdue)}.`
+                          : 'Nenhum lançamento vencido em aberto neste mês.'}
+                      </p>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {monthlySummaryTransactions.length} lançamento(s) no período • Família: {userName}
+                    </p>
+                  </div>
+                </div>
+                {monthlySummaryMessage && (
+                  <p role="status" className="mt-4 text-xs font-medium text-emerald-300">
+                    {monthlySummaryMessage}
+                  </p>
+                )}
+              </section>
 
               <section className="mt-5 bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950/20 border border-slate-800/90 rounded-3xl p-6 shadow-xl">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
