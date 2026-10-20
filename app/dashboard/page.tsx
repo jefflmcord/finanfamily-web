@@ -10,10 +10,11 @@ import CreditCardList from '@/components/CreditCardList';
 import AccountsManager from '@/components/AccountsManager';
 import CategoriesManager from '@/components/CategoriesManager';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
+import AnnualProvisionsManager from '@/components/AnnualProvisionsManager';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import { getCardPurchaseDueDate } from '@/lib/creditCardBilling';
 import {
-  Wallet, Loader2, PlusCircle, CreditCard, Target, LayoutDashboard, LogOut, X, 
+  Wallet, Loader2, PlusCircle, CreditCard, Target, PiggyBank, LayoutDashboard, LogOut, X,
   CheckCircle2, FileText, DollarSign, Layers, PieChart as PieIcon, 
   BarChart3, Trophy, Edit, Trash2, AlertTriangle, Calendar, Filter, Circle, CheckCircle, AlertCircle,
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Sparkles, Clock,
@@ -757,6 +758,7 @@ export default function DashboardPage() {
   const canManageCards = hasFamilyPermission('cards_manage');
   const canManageCategories = hasFamilyPermission('categories_manage');
   const canManageGoals = hasFamilyPermission('goals_manage');
+  const canManageProvisions = hasFamilyPermission('provisions_manage');
 
   if (loading) {
     return (
@@ -2098,7 +2100,10 @@ export default function DashboardPage() {
           )}
           {activeModule === 'pagar' && canReadFamily && <button onClick={() => { setActiveSubMenu('contas_pagar'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_pagar' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><FileText className="w-5 h-5" /> Lançamentos a Pagar</button>}
           {activeModule === 'receber' && canReadFamily && <button onClick={() => { setActiveSubMenu('contas_receber'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'contas_receber' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><DollarSign className="w-5 h-5" /> Lançamentos a Receber</button>}
-          {activeModule === 'investimentos' && canReadFamily && <button onClick={() => { setActiveSubMenu('metas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Target className="w-5 h-5" /> Metas & Objetivos</button>}
+          {activeModule === 'investimentos' && canReadFamily && <>
+            <button onClick={() => { setActiveSubMenu('metas'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'metas' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><Target className="w-5 h-5" /> Metas & Objetivos</button>
+            <button onClick={() => { setActiveSubMenu('provisoes'); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm ${activeSubMenu === 'provisoes' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'text-slate-400'}`}><PiggyBank className="w-5 h-5" /> Provisões anuais</button>
+          </>}
         </aside>
 
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-10 pb-24 md:pb-10 max-w-7xl w-full mx-auto space-y-6 md:space-y-8">
@@ -3802,7 +3807,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeModule === 'investimentos' && (
+          {activeModule === 'investimentos' && activeSubMenu === 'metas' && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
@@ -3858,6 +3863,9 @@ export default function DashboardPage() {
                 ) : <div className="col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3"><Target className="w-12 h-12 text-slate-600 mx-auto" /><p className="text-white font-bold text-lg">Nenhum objetivo cadastrado.</p><p className="text-slate-400 text-sm">Clique em "+ Novo Objetivo" para começar a planear suas conquistas.</p></div>}
               </div>
             </div>
+          )}
+          {activeModule === 'investimentos' && activeSubMenu === 'provisoes' && canReadFamily && (
+            <AnnualProvisionsManager canManage={canManageProvisions} />
           )}
         </main>
       </div>

@@ -13,7 +13,8 @@ type PermissionKey =
   | 'accounts_manage'
   | 'cards_manage'
   | 'categories_manage'
-  | 'goals_manage';
+  | 'goals_manage'
+  | 'provisions_manage';
 
 interface FamilyMember {
   id: string;
@@ -40,6 +41,7 @@ const PERMISSIONS: { key: PermissionKey; label: string }[] = [
   { key: 'cards_manage', label: 'Cadastrar, editar e excluir cartões' },
   { key: 'categories_manage', label: 'Gerenciar categorias' },
   { key: 'goals_manage', label: 'Gerenciar metas de investimento' },
+  { key: 'provisions_manage', label: 'Gerenciar provisões anuais' },
 ];
 
 const DEFAULT_PERMISSIONS: Record<PermissionKey, boolean> = {
@@ -52,6 +54,7 @@ const DEFAULT_PERMISSIONS: Record<PermissionKey, boolean> = {
   cards_manage: false,
   categories_manage: false,
   goals_manage: false,
+  provisions_manage: false,
 };
 
 export default function FamilyMembersManager({ showHeading = true }: { showHeading?: boolean }) {
