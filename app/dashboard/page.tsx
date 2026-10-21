@@ -1104,6 +1104,21 @@ export default function DashboardPage() {
         />
 
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-10 pb-24 md:pb-10 max-w-7xl w-full mx-auto space-y-6 md:space-y-8">
+          {familyAccess?.broadcast?.message && (
+            <div
+              role="status"
+              className={`rounded-2xl border px-4 py-3.5 text-sm font-medium flex items-center justify-between gap-3 ${
+                familyAccess.broadcast.type === 'WARNING'
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                  : familyAccess.broadcast.type === 'SUCCESS'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                    : 'border-sky-500/30 bg-sky-500/10 text-sky-200'
+              }`}
+            >
+              <span>{familyAccess.broadcast.message}</span>
+            </div>
+          )}
+
           {error && (
             <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm font-medium">
               {error}

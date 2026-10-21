@@ -1,29 +1,111 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Ban, Loader2, Phone, Save, ShieldAlert, Unlock } from 'lucide-react';
+import {
+  ArrowLeft,
+  Ban,
+  CalendarPlus,
+  CheckCircle2,
+  Crown,
+  Download,
+  Edit3,
+  Flame,
+  KeyRound,
+  Loader2,
+  Megaphone,
+  MessageCircle,
+  Phone,
+  Save,
+  Search,
+  ShieldAlert,
+  Sparkles,
+  TrendingUp,
+  Unlock,
+  Users,
+  X,
+} from 'lucide-react';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
+
+type PlanType = 'TRIAL' | 'MONTHLY' | 'ANNUAL' | 'COURTESY';
+type BroadcastType = 'INFO' | 'SUCCESS' | 'WARNING';
+type FilterTab = 'ALL' | 'HOT_TRIAL' | 'EXPIRED_TRIAL' | 'ACTIVE_TRIAL' | 'PAID' | 'COURTESY' | 'BLOCKED';
 
 interface TenantReportRow {
   id: string | number;
   name: string;
   registered_at: string | null;
   blocked_at: string | null;
+  plan_type?: PlanType;
+  trial_ends_at?: string | null;
+  subscription_ends_at?: string | null;
+  admin_notes?: string | null;
+  owner_id?: string | number | null;
   owner_name: string | null;
   owner_email: string | null;
+  owner_phone?: string | null;
+  members_count?: number;
+  accounts_count?: number;
+  cards_count?: number;
+  transactions_count?: number;
+  last_transaction_date?: string | null;
 }
+
+const ADMIN_EMAIL = 'jeffersonluismattosocordeiro@gmail.com';
+const MONTHLY_PRICE = 29.9;
+const ANNUAL_MONTHLY_EQUIVALENT = 24.9;
+const ANNUAL_TOTAL_PRICE = 298.8;
+
+const PLAN_LABELS: Record<PlanType, string> = {
+  TRIAL: 'Teste Grátis (10d)',
+  MONTHLY: 'Mensal (R$ 29,90)',
+  ANNUAL: 'Anual (R$ 298,80)',
+  COURTESY: 'Cortesia / Parceiro',
+};
+
+const PLAN_BADGE_CLASSES: Record<PlanType, string> = {
+  TRIAL: 'bg-sky-500/10 text-sky-300 border border-sky-500/25',
+  MONTHLY: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
+  ANNUAL: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+  COURTESY: 'bg-purple-500/15 text-purple-300 border border-purple-500/30',
+};
+
+const formatCurrencyBRL = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export default function InternalTenantReportPage() {
   const [tenants, setTenants] = useState<TenantReportRow[]>([]);
   const [contactPhone, setContactPhone] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastType, setBroadcastType] = useState<BroadcastType>('INFO');
   const [loading, setLoading] = useState(true);
   const [savingPhone, setSavingPhone] = useState(false);
+  const [savingBroadcast, setSavingBroadcast] = useState(false);
   const [updatingTenant, setUpdatingTenant] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [actionError, setActionError] = useState('');
   const [forbidden, setForbidden] = useState(false);
+
+  // Filtros e Busca
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState<FilterTab>('ALL');
+
+  // Modal CRM / Edição Comercial & Suporte
+  const [selectedTenant, setSelectedTenant] = useState<TenantReportRow | null>(null);
+  const [crmPlanType, setCrmPlanType] = useState<PlanType>('TRIAL');
+  const [crmTrialEndsAt, setCrmTrialEndsAt] = useState('');
+  const [crmSubscriptionEndsAt, setCrmSubscriptionEndsAt] = useState('');
+  const [crmOwnerPhone, setCrmOwnerPhone] = useState('');
+  const [crmAdminNotes, setCrmAdminNotes] = useState('');
+  const [savingCrm, setSavingCrm] = useState(false);
+
+  // Reset de senha no Modal
+  const [tempPassword, setTempPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+
+  // Modal / Menu de WhatsApp Rápido
+  const [whatsAppTenant, setWhatsAppTenant] = useState<TenantReportRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,8 +119,10 @@ export default function InternalTenantReportPage() {
           throw new Error(result.error || 'Não foi possível carregar o relatório.');
         }
         if (!cancelled) {
-          setTenants(result.tenants);
-          setContactPhone(result.contactPhone);
+          setTenants(Array.isArray(result.tenants) ? result.tenants : []);
+          setContactPhone(result.contactPhone || '');
+          setBroadcastMessage(result.broadcastMessage || '');
+          setBroadcastType((result.broadcastType as BroadcastType) || 'INFO');
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -55,6 +139,204 @@ export default function InternalTenantReportPage() {
     };
   }, []);
 
+  const formatRegistrationDate = (value: string | null) => {
+    if (!value) return 'Data não registrada';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? 'Data inválida'
+      : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+  };
+
+  const formatShortDate = (value?: string | null) => {
+    if (!value) return '—';
+    const clean = value.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+      const [y, m, d] = clean.split('-');
+      return `${d}/${m}/${y}`;
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('pt-BR').format(date);
+  };
+
+  const getTrialInfo = (tenant: TenantReportRow) => {
+    const plan: PlanType = tenant.plan_type || 'TRIAL';
+    if (plan === 'COURTESY') {
+      return {
+        label: 'Isento (Cortesia)',
+        badgeClass: 'bg-purple-500/10 text-purple-300 border border-purple-500/20',
+        expired: false,
+        daysRemaining: 999,
+      };
+    }
+
+    if (plan === 'MONTHLY' || plan === 'ANNUAL') {
+      if (!tenant.subscription_ends_at) {
+        return {
+          label: 'Assinatura ativa',
+          badgeClass: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20',
+          expired: false,
+          daysRemaining: 30,
+        };
+      }
+      const endMs = new Date(`${tenant.subscription_ends_at.slice(0, 10)}T23:59:59`).getTime();
+      const diffDays = Math.ceil((endMs - Date.now()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        return {
+          label: `Venceu em ${formatShortDate(tenant.subscription_ends_at)} (${Math.abs(diffDays)}d atrás)`,
+          badgeClass: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
+          expired: true,
+          daysRemaining: diffDays,
+        };
+      }
+      if (diffDays <= 5) {
+        return {
+          label: `Vence em ${diffDays}d (${formatShortDate(tenant.subscription_ends_at)})`,
+          badgeClass: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+          expired: false,
+          daysRemaining: diffDays,
+        };
+      }
+      return {
+        label: `Até ${formatShortDate(tenant.subscription_ends_at)}`,
+        badgeClass: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20',
+        expired: false,
+        daysRemaining: diffDays,
+      };
+    }
+
+    // Plano TRIAL (10 dias)
+    const registeredMs = tenant.registered_at ? new Date(tenant.registered_at).getTime() : NaN;
+    const trialEndsMs = tenant.trial_ends_at
+      ? new Date(tenant.trial_ends_at).getTime()
+      : !Number.isNaN(registeredMs)
+        ? registeredMs + 10 * 24 * 60 * 60 * 1000
+        : NaN;
+
+    if (Number.isNaN(trialEndsMs)) {
+      return { label: 'Sem data', badgeClass: 'bg-slate-800 text-slate-400', expired: false, daysRemaining: 0 };
+    }
+
+    const remainingDays = Math.ceil((trialEndsMs - Date.now()) / (1000 * 60 * 60 * 24));
+    const elapsedDays = !Number.isNaN(registeredMs)
+      ? Math.max(1, Math.floor((Date.now() - registeredMs) / (1000 * 60 * 60 * 24)) + 1)
+      : Math.max(1, 11 - remainingDays);
+
+    if (remainingDays > 2) {
+      return {
+        label: `Dia ${Math.min(elapsedDays, 10)}/10 (${remainingDays}d restantes)`,
+        badgeClass: 'bg-sky-500/10 text-sky-300 border border-sky-500/20',
+        expired: false,
+        daysRemaining: remainingDays,
+      };
+    }
+    if (remainingDays >= 0) {
+      return {
+        label: remainingDays === 0 ? 'Último dia de teste!' : `Faltam ${remainingDays}d (Até ${formatShortDate(new Date(trialEndsMs).toISOString())})`,
+        badgeClass: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+        expired: false,
+        daysRemaining: remainingDays,
+      };
+    }
+    return {
+      label: `Teste vencido há ${Math.abs(remainingDays)}d`,
+      badgeClass: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
+      expired: true,
+      daysRemaining: remainingDays,
+    };
+  };
+
+  const isHotLead = (tenant: TenantReportRow) => {
+    const isAdmin = tenant.owner_email?.toLowerCase() === ADMIN_EMAIL;
+    if (isAdmin || tenant.blocked_at) return false;
+    const plan = tenant.plan_type || 'TRIAL';
+    if (plan !== 'TRIAL') return false;
+    const txCount = Number(tenant.transactions_count || 0);
+    const cardsCount = Number(tenant.cards_count || 0);
+    const membersCount = Number(tenant.members_count || 1);
+    return txCount >= 1 || cardsCount >= 1 || membersCount > 1;
+  };
+
+  // KPIs Executivos do Negócio
+  const kpis = useMemo(() => {
+    const customerTenants = tenants.filter(t => t.owner_email?.toLowerCase() !== ADMIN_EMAIL);
+    const monthlySubscribers = customerTenants.filter(t => !t.blocked_at && t.plan_type === 'MONTHLY').length;
+    const annualSubscribers = customerTenants.filter(t => !t.blocked_at && t.plan_type === 'ANNUAL').length;
+    const paidSubscribers = monthlySubscribers + annualSubscribers;
+
+    const mrr = monthlySubscribers * MONTHLY_PRICE + annualSubscribers * ANNUAL_MONTHLY_EQUIVALENT;
+    const arr = mrr * 12;
+
+    const activeTrialCount = customerTenants.filter(
+      t => !t.blocked_at && (t.plan_type || 'TRIAL') === 'TRIAL' && !getTrialInfo(t).expired
+    ).length;
+
+    const expiredTrialCount = customerTenants.filter(
+      t => !t.blocked_at && (t.plan_type || 'TRIAL') === 'TRIAL' && getTrialInfo(t).expired
+    ).length;
+
+    const hotLeadsCount = customerTenants.filter(t => isHotLead(t)).length;
+    const blockedCount = customerTenants.filter(t => Boolean(t.blocked_at)).length;
+    const courtesyCount = customerTenants.filter(t => !t.blocked_at && t.plan_type === 'COURTESY').length;
+
+    const conversionRate = customerTenants.length > 0
+      ? Math.round((paidSubscribers / customerTenants.length) * 100)
+      : 0;
+
+    const totalTransactions = tenants.reduce((acc, t) => acc + Number(t.transactions_count || 0), 0);
+
+    return {
+      totalCustomers: customerTenants.length,
+      monthlySubscribers,
+      annualSubscribers,
+      paidSubscribers,
+      mrr,
+      arr,
+      activeTrialCount,
+      expiredTrialCount,
+      hotLeadsCount,
+      blockedCount,
+      courtesyCount,
+      conversionRate,
+      totalTransactions,
+    };
+  }, [tenants]);
+
+  const filteredTenants = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return tenants.filter(tenant => {
+      const isAdmin = tenant.owner_email?.toLowerCase() === ADMIN_EMAIL;
+      const plan = tenant.plan_type || 'TRIAL';
+      const trialInfo = getTrialInfo(tenant);
+
+      if (activeFilter === 'HOT_TRIAL' && !isHotLead(tenant)) return false;
+      if (activeFilter === 'EXPIRED_TRIAL' && (isAdmin || tenant.blocked_at || plan !== 'TRIAL' || !trialInfo.expired)) {
+        return false;
+      }
+      if (activeFilter === 'ACTIVE_TRIAL' && (isAdmin || tenant.blocked_at || plan !== 'TRIAL' || trialInfo.expired)) {
+        return false;
+      }
+      if (activeFilter === 'PAID' && (tenant.blocked_at || (plan !== 'MONTHLY' && plan !== 'ANNUAL'))) {
+        return false;
+      }
+      if (activeFilter === 'COURTESY' && plan !== 'COURTESY') return false;
+      if (activeFilter === 'BLOCKED' && !tenant.blocked_at) return false;
+
+      if (!query) return true;
+      const haystack = [
+        tenant.name,
+        tenant.owner_name,
+        tenant.owner_email,
+        tenant.owner_phone,
+        tenant.admin_notes,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [tenants, searchTerm, activeFilter]);
+
   const saveContactPhone = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSavingPhone(true);
@@ -69,11 +351,38 @@ export default function InternalTenantReportPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Não foi possível salvar o telefone.');
       setContactPhone(result.contactPhone);
-      setActionMessage('Telefone de contato atualizado.');
+      setActionMessage('Telefone de contato para bloqueados atualizado com sucesso.');
     } catch (saveError) {
       setActionError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar o telefone.');
     } finally {
       setSavingPhone(false);
+    }
+  };
+
+  const saveBroadcast = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSavingBroadcast(true);
+    setActionMessage('');
+    setActionError('');
+    try {
+      const response = await authenticatedFetch(`${API_URL}/api/internal/broadcast`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: broadcastMessage, type: broadcastType }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Não foi possível salvar o comunicado.');
+      setBroadcastMessage(result.broadcastMessage);
+      setBroadcastType(result.broadcastType);
+      setActionMessage(
+        result.broadcastMessage
+          ? 'Comunicado global publicado no topo do Dashboard de todas as famílias.'
+          : 'Comunicado global removido.'
+      );
+    } catch (saveErr) {
+      setActionError(saveErr instanceof Error ? saveErr.message : 'Não foi possível salvar o comunicado.');
+    } finally {
+      setSavingBroadcast(false);
     }
   };
 
@@ -85,89 +394,264 @@ export default function InternalTenantReportPage() {
     setActionMessage('');
     setActionError('');
     try {
-      const response = await authenticatedFetch(`${API_URL}/api/internal/tenants/${encodeURIComponent(familyId)}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blocked }),
-      });
+      const response = await authenticatedFetch(
+        `${API_URL}/api/internal/tenants/${encodeURIComponent(familyId)}/status`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blocked }),
+        }
+      );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Não foi possível alterar o acesso do tenant.');
-      setTenants(current => current.map(item =>
-        String(item.id) === familyId ? { ...item, blocked_at: result.blocked_at } : item
-      ));
+      setTenants(current =>
+        current.map(item => (String(item.id) === familyId ? { ...item, blocked_at: result.blocked_at } : item))
+      );
       setActionMessage(blocked ? 'Tenant bloqueado.' : 'Acesso do tenant liberado.');
     } catch (updateError) {
-      setActionError(updateError instanceof Error ? updateError.message : 'Não foi possível alterar o acesso do tenant.');
+      setActionError(
+        updateError instanceof Error ? updateError.message : 'Não foi possível alterar o acesso do tenant.'
+      );
     } finally {
       setUpdatingTenant(null);
     }
   };
 
-  const formatRegistrationDate = (value: string | null) => {
-    if (!value) return 'Data não registrada';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-      ? 'Data inválida'
-      : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  const handleQuickCommercialAction = async (
+    tenant: TenantReportRow,
+    payload: {
+      extend_trial_days?: number;
+      activate_cycle?: 'MONTHLY' | 'ANNUAL';
+      plan_type?: PlanType;
+    },
+    successLabel: string
+  ) => {
+    const familyId = String(tenant.id);
+    setUpdatingTenant(familyId);
+    setActionMessage('');
+    setActionError('');
+    try {
+      const response = await authenticatedFetch(
+        `${API_URL}/api/internal/tenants/${encodeURIComponent(familyId)}/commercial`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Não foi possível atualizar o plano.');
+      setTenants(current =>
+        current.map(item =>
+          String(item.id) === familyId
+            ? {
+                ...item,
+                plan_type: result.plan_type,
+                trial_ends_at: result.trial_ends_at,
+                subscription_ends_at: result.subscription_ends_at,
+                admin_notes: result.admin_notes,
+                blocked_at: result.blocked_at,
+              }
+            : item
+        )
+      );
+      setActionMessage(successLabel);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Erro ao atualizar dados comerciais.');
+    } finally {
+      setUpdatingTenant(null);
+    }
   };
 
-  const getTrialInfo = (registeredAt: string | null) => {
-    if (!registeredAt) return { label: 'Sem data', badgeClass: 'bg-slate-800 text-slate-400', expired: false };
-    const start = new Date(registeredAt);
-    if (Number.isNaN(start.getTime())) {
-      return { label: 'Data inválida', badgeClass: 'bg-slate-800 text-slate-400', expired: false };
+  const openCrmModal = (tenant: TenantReportRow) => {
+    setSelectedTenant(tenant);
+    setCrmPlanType(tenant.plan_type || 'TRIAL');
+    setCrmTrialEndsAt(tenant.trial_ends_at ? tenant.trial_ends_at.slice(0, 10) : '');
+    setCrmSubscriptionEndsAt(tenant.subscription_ends_at ? tenant.subscription_ends_at.slice(0, 10) : '');
+    setCrmOwnerPhone(tenant.owner_phone || '');
+    setCrmAdminNotes(tenant.admin_notes || '');
+    setTempPassword('');
+  };
+
+  const saveCrmDetails = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedTenant) return;
+    const familyId = String(selectedTenant.id);
+    setSavingCrm(true);
+    setActionMessage('');
+    setActionError('');
+    try {
+      const response = await authenticatedFetch(
+        `${API_URL}/api/internal/tenants/${encodeURIComponent(familyId)}/commercial`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan_type: crmPlanType,
+            trial_ends_at: crmTrialEndsAt ? `${crmTrialEndsAt}T23:59:59.000Z` : undefined,
+            subscription_ends_at: crmSubscriptionEndsAt || null,
+            owner_phone: crmOwnerPhone,
+            admin_notes: crmAdminNotes,
+          }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Não foi possível salvar os dados do cliente.');
+
+      setTenants(current =>
+        current.map(item =>
+          String(item.id) === familyId
+            ? {
+                ...item,
+                plan_type: result.plan_type,
+                trial_ends_at: result.trial_ends_at,
+                subscription_ends_at: result.subscription_ends_at,
+                admin_notes: result.admin_notes,
+                owner_phone: result.owner_phone,
+              }
+            : item
+        )
+      );
+      setActionMessage(`Dados comerciais de "${selectedTenant.name}" atualizados.`);
+      setSelectedTenant(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Erro ao salvar dados comerciais.');
+    } finally {
+      setSavingCrm(false);
     }
-    const elapsedDays = Math.max(0, Math.floor((Date.now() - start.getTime()) / (1000 * 60 * 60 * 24)));
-    const remainingDays = 10 - elapsedDays;
-    if (remainingDays > 2) {
-      return {
-        label: `Dia ${elapsedDays + 1}/10 (${remainingDays}d restantes)`,
-        badgeClass: 'bg-sky-500/10 text-sky-300 border border-sky-500/20',
-        expired: false,
-      };
+  };
+
+  const handleResetOwnerPassword = async () => {
+    if (!selectedTenant || !tempPassword.trim()) return;
+    const familyId = String(selectedTenant.id);
+    setResettingPassword(true);
+    setActionMessage('');
+    setActionError('');
+    try {
+      const response = await authenticatedFetch(
+        `${API_URL}/api/internal/tenants/${encodeURIComponent(familyId)}/reset-password`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ new_password: tempPassword.trim() }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Não foi possível redefinir a senha.');
+      setActionMessage(result.message || 'Senha temporária definida com sucesso!');
+      setTempPassword('');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Erro ao redefinir a senha.');
+    } finally {
+      setResettingPassword(false);
     }
-    if (remainingDays >= 0) {
-      return {
-        label: remainingDays === 0 ? 'Último dia (10/10)' : `Dia ${elapsedDays + 1}/10 (${remainingDays}d restante)`,
-        badgeClass: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
-        expired: false,
-      };
-    }
-    return {
-      label: `${elapsedDays} dias (+${Math.abs(remainingDays)}d após teste)`,
-      badgeClass: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
-      expired: true,
-    };
+  };
+
+  const exportTenantsCsv = () => {
+    const headers = [
+      'ID',
+      'Familia',
+      'Responsavel',
+      'Email',
+      'Telefone',
+      'Data Cadastro',
+      'Plano',
+      'Status Teste/Assinatura',
+      'Status Acesso',
+      'Membros',
+      'Contas',
+      'Cartoes',
+      'Lancamentos',
+      'Ultimo Lancamento',
+      'Notas Internas',
+    ];
+    const rows = filteredTenants.map(t => [
+      String(t.id),
+      t.name,
+      t.owner_name || '',
+      t.owner_email || '',
+      t.owner_phone || '',
+      formatRegistrationDate(t.registered_at),
+      PLAN_LABELS[t.plan_type || 'TRIAL'],
+      getTrialInfo(t).label,
+      t.blocked_at ? 'Bloqueado' : 'Ativo',
+      String(t.members_count ?? 1),
+      String(t.accounts_count ?? 0),
+      String(t.cards_count ?? 0),
+      String(t.transactions_count ?? 0),
+      t.last_transaction_date || '',
+      (t.admin_notes || '').replace(/\r?\n/g, ' '),
+    ]);
+
+    const csvContent =
+      '\uFEFF' +
+      [headers, ...rows]
+        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+        .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `finanfamily-clientes-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const buildWhatsAppUrl = (phone: string | null | undefined, message: string) => {
+    const digits = (phone || '').replace(/\D/g, '');
+    const normalizedPhone = digits.length >= 10 && !digits.startsWith('55') ? `55${digits}` : digits;
+    const encoded = encodeURIComponent(message);
+    return normalizedPhone
+      ? `https://wa.me/${normalizedPhone}?text=${encoded}`
+      : `https://wa.me/?text=${encoded}`;
   };
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
-      <div className="mx-auto max-w-6xl">
-        <Link
-          href="/dashboard"
-          className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-400 transition-colors hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4" /> Voltar ao dashboard
-        </Link>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400 transition-colors hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar ao dashboard
+          </Link>
 
-        <header className="mb-6">
+          <button
+            type="button"
+            onClick={exportTenantsCsv}
+            disabled={tenants.length === 0}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-200 transition-colors hover:border-emerald-500/40 hover:text-white disabled:opacity-50 cursor-pointer"
+          >
+            <Download className="h-4 w-4 text-emerald-400" />
+            Exportar Base CSV (Excel)
+          </button>
+        </div>
+
+        <header className="mb-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
-              <ShieldAlert className="h-5 w-5" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 shadow-lg">
+              <ShieldAlert className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-300">Acesso interno</p>
-              <h1 className="text-2xl font-extrabold text-white">Relatório de tenants</h1>
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                Backoffice & CRM SaaS • FinanFamily
+              </p>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+                Central de Gestão do Negócio
+              </h1>
             </div>
           </div>
-          <p className="mt-3 text-sm text-slate-400">
-            Acompanhe os cadastros, o prazo do teste grátis de 10 dias e controle manualmente o acesso dos tenants. O bloqueio vale para todos os membros da família.
+          <p className="mt-2.5 text-sm text-slate-400 max-w-3xl">
+            Gerencie seus clientes em período de teste (10 dias), acompanhe o engajamento real de cada família,
+            controle assinaturas Mensais (R$ 29,90) e Anuais (R$ 298,80) e acione clientes via WhatsApp com 1 clique.
           </p>
         </header>
 
         {loading ? (
           <div className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-300">
-            <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Carregando relatório...
+            <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Carregando central de gestão...
           </div>
         ) : error ? (
           <div
@@ -181,130 +665,452 @@ export default function InternalTenantReportPage() {
             {forbidden ? 'Esta conta não tem autorização para acessar o relatório.' : error}
           </div>
         ) : (
-          <div className="space-y-5">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-300">
-                  <Phone className="h-5 w-5" />
+          <div className="space-y-6">
+            {/* ================= CARDS EXECUTIVOS (KPIs DO SAAS) ================= */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="rounded-2xl border border-emerald-500/25 bg-slate-900 p-5 shadow-lg">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  <span>MRR (Receita Mensal)</span>
+                  <TrendingUp className="h-4 w-4" />
                 </div>
-                <div>
-                  <h2 className="text-sm font-bold text-white">Telefone exibido para tenants bloqueados</h2>
-                  <p className="mt-1 text-xs text-slate-400">Alterar este número atualiza a mensagem de todos os tenants bloqueados.</p>
+                <p className="mt-2 text-2xl sm:text-3xl font-black text-white">
+                  {formatCurrencyBRL(kpis.mrr)}
+                </p>
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+                  <span>ARR Projetado: <strong className="text-slate-200">{formatCurrencyBRL(kpis.arr)}</strong></span>
+                  <span className="text-emerald-400 font-bold">{kpis.paidSubscribers} pagantes</span>
                 </div>
               </div>
-              <form onSubmit={saveContactPhone} className="flex flex-col gap-3 sm:flex-row">
-                <input
-                  required
-                  type="tel"
-                  maxLength={30}
-                  value={contactPhone}
-                  onChange={event => setContactPhone(event.target.value)}
-                  aria-label="Telefone de contato"
-                  placeholder="(41) 0000-0000"
-                  className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="submit"
-                  disabled={savingPhone}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {savingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {savingPhone ? 'Salvando...' : 'Salvar telefone'}
-                </button>
-              </form>
-              {actionMessage && <p role="status" className="mt-3 text-sm text-emerald-400">{actionMessage}</p>}
-              {actionError && <p role="alert" className="mt-3 text-sm text-rose-400">{actionError}</p>}
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-sky-400">
+                  <span>Funil de Teste (10 Dias)</span>
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="mt-2 flex items-baseline gap-3">
+                  <p className="text-2xl sm:text-3xl font-black text-white">{kpis.activeTrialCount}</p>
+                  <span className="text-xs font-semibold text-slate-400">em teste ativo</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs">
+                  <span className="text-rose-400 font-bold">
+                    {kpis.expiredTrialCount} c/ teste vencido
+                  </span>
+                  <span className="text-slate-400">
+                    Conversão: <strong className="text-white">{kpis.conversionRate}%</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-400">
+                  <span>Leads Quentes no Teste</span>
+                  <Flame className="h-4 w-4" />
+                </div>
+                <div className="mt-2 flex items-baseline gap-3">
+                  <p className="text-2xl sm:text-3xl font-black text-amber-300">{kpis.hotLeadsCount}</p>
+                  <span className="text-xs font-semibold text-slate-400">usando ativamente</span>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  Famílias em teste que já criaram lançamentos, cartões ou convidaram membros.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-300">
+                  <span>Base Total & Uso</span>
+                  <Users className="h-4 w-4 text-emerald-400" />
+                </div>
+                <div className="mt-2 flex items-baseline gap-3">
+                  <p className="text-2xl sm:text-3xl font-black text-white">{kpis.totalCustomers}</p>
+                  <span className="text-xs font-semibold text-slate-400">famílias clientes</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+                  <span>{kpis.totalTransactions} lançamentos</span>
+                  <span className="text-rose-400 font-semibold">{kpis.blockedCount} bloqueados</span>
+                </div>
+              </div>
             </section>
 
-            <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-              <div className="border-b border-slate-800 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-white">
-                  {tenants.length} {tenants.length === 1 ? 'tenant cadastrado' : 'tenants cadastrados'}
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
-                  <span className="rounded-full bg-sky-500/10 border border-sky-500/20 px-3 py-1 text-sky-300">
-                    Em teste (≤ 10d): {tenants.filter(t => !t.blocked_at && !getTrialInfo(t.registered_at).expired).length}
-                  </span>
-                  <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-amber-300">
-                    Acima de 10 dias (Ativos): {tenants.filter(t => !t.blocked_at && getTrialInfo(t.registered_at).expired).length}
-                  </span>
-                  <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-3 py-1 text-rose-300">
-                    Bloqueados: {tenants.filter(t => Boolean(t.blocked_at)).length}
-                  </span>
+            {/* ================= CONFIGURAÇÕES RÁPIDAS (TELEFONE + BROADCAST) ================= */}
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-300">
+                    <Phone className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-white">Telefone exibido para tenants bloqueados</h2>
+                    <p className="text-xs text-slate-400">
+                      Aparece na tela de bloqueio quando a família precisa regularizar o plano.
+                    </p>
+                  </div>
+                </div>
+                <form onSubmit={saveContactPhone} className="flex flex-col gap-2.5 sm:flex-row">
+                  <input
+                    required
+                    type="tel"
+                    maxLength={30}
+                    value={contactPhone}
+                    onChange={event => setContactPhone(event.target.value)}
+                    aria-label="Telefone de contato"
+                    placeholder="(41) 0000-0000"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingPhone}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 transition-colors hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+                  >
+                    {savingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {savingPhone ? 'Salvando...' : 'Salvar telefone'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/10 text-sky-300">
+                      <Megaphone className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-white">Comunicado Global no Dashboard</h2>
+                      <p className="text-xs text-slate-400">
+                        Exibe um aviso no topo do painel de todas as famílias (deixe vazio para ocultar).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <form onSubmit={saveBroadcast} className="flex flex-col gap-2.5 sm:flex-row">
+                  <select
+                    value={broadcastType}
+                    onChange={e => setBroadcastType(e.target.value as BroadcastType)}
+                    aria-label="Tipo do comunicado"
+                    className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-xs font-bold text-white outline-none focus:border-emerald-500"
+                  >
+                    <option value="INFO">Informativo (Azul)</option>
+                    <option value="SUCCESS">Novidade (Verde)</option>
+                    <option value="WARNING">Alerta / Manutenção (Âmbar)</option>
+                  </select>
+                  <input
+                    type="text"
+                    maxLength={400}
+                    value={broadcastMessage}
+                    onChange={e => setBroadcastMessage(e.target.value)}
+                    placeholder="Ex.: Novidade! Agora você pode exportar relatórios em PDF e Excel..."
+                    className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingBroadcast}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 transition-colors hover:bg-sky-400 disabled:opacity-60 cursor-pointer"
+                  >
+                    {savingBroadcast ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Publicar
+                  </button>
+                </form>
+              </div>
+            </section>
+
+            {(actionMessage || actionError) && (
+              <div
+                role={actionError ? 'alert' : 'status'}
+                className={`rounded-2xl border px-4 py-3 text-sm font-semibold flex items-center justify-between ${
+                  actionError
+                    ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                }`}
+              >
+                <span>{actionError || actionMessage}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionMessage('');
+                    setActionError('');
+                  }}
+                  className="text-xs underline opacity-80 hover:opacity-100"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
+
+            {/* ================= TABELA CRM DE TENANTS ================= */}
+            <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+              {/* Barra de Busca e Filtros */}
+              <div className="border-b border-slate-800 p-4 sm:p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      placeholder="Buscar por família, nome, e-mail, telefone ou nota..."
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950 pl-10 pr-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-400">
+                    Exibindo <strong className="text-white">{filteredTenants.length}</strong> de{' '}
+                    <strong className="text-white">{tenants.length}</strong> cadastros
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {(
+                    [
+                      { id: 'ALL', label: `Todos (${tenants.length})` },
+                      { id: 'HOT_TRIAL', label: `🔥 Leads Quentes (${kpis.hotLeadsCount})` },
+                      { id: 'EXPIRED_TRIAL', label: `⏰ Teste Vencido (${kpis.expiredTrialCount})` },
+                      { id: 'ACTIVE_TRIAL', label: `🧪 Em Teste ≤10d (${kpis.activeTrialCount})` },
+                      { id: 'PAID', label: `💎 Assinantes (${kpis.paidSubscribers})` },
+                      { id: 'COURTESY', label: `🎁 Cortesia (${kpis.courtesyCount})` },
+                      { id: 'BLOCKED', label: `🚫 Bloqueados (${kpis.blockedCount})` },
+                    ] as { id: FilterTab; label: string }[]
+                  ).map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveFilter(tab.id)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                        activeFilter === tab.id
+                          ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                          : 'bg-slate-950 text-slate-300 border border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
               </div>
+
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-left text-sm">
+                <table className="w-full min-w-[1150px] text-left text-sm">
                   <thead className="bg-slate-950/70 text-xs uppercase tracking-wide text-slate-400">
                     <tr>
-                      <th scope="col" className="px-5 py-3 font-bold">Família</th>
-                      <th scope="col" className="px-5 py-3 font-bold">Usuário principal</th>
-                      <th scope="col" className="px-5 py-3 font-bold">E-mail</th>
-                      <th scope="col" className="px-5 py-3 font-bold">Data de cadastro</th>
-                      <th scope="col" className="px-5 py-3 font-bold">Teste (10 dias)</th>
-                      <th scope="col" className="px-5 py-3 font-bold">Status</th>
-                      <th scope="col" className="px-5 py-3 font-bold">Ação</th>
+                      <th scope="col" className="px-4 py-3.5 font-bold">Família & Contato</th>
+                      <th scope="col" className="px-4 py-3.5 font-bold">Engajamento & Uso</th>
+                      <th scope="col" className="px-4 py-3.5 font-bold">Plano Atual</th>
+                      <th scope="col" className="px-4 py-3.5 font-bold">Prazo (Teste / Assinatura)</th>
+                      <th scope="col" className="px-4 py-3.5 font-bold">Status</th>
+                      <th scope="col" className="px-4 py-3.5 font-bold">Ações Rápidas & CRM</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {tenants.map(tenant => {
+                    {filteredTenants.map(tenant => {
                       const familyId = String(tenant.id);
                       const isBlocked = Boolean(tenant.blocked_at);
-                      const isAdminTenant = tenant.owner_email?.toLowerCase() === 'jeffersonluismattosocordeiro@gmail.com';
+                      const isAdminTenant = tenant.owner_email?.toLowerCase() === ADMIN_EMAIL;
                       const isUpdating = updatingTenant === familyId;
-                      const trialInfo = getTrialInfo(tenant.registered_at);
+                      const plan: PlanType = tenant.plan_type || 'TRIAL';
+                      const trialInfo = getTrialInfo(tenant);
+                      const hotLead = isHotLead(tenant);
+                      const txCount = Number(tenant.transactions_count || 0);
+                      const cardsCount = Number(tenant.cards_count || 0);
+                      const membersCount = Number(tenant.members_count || 1);
+
                       return (
-                        <tr key={tenant.id} className="text-slate-200">
-                          <td className="px-5 py-4 font-semibold text-white">{tenant.name}</td>
-                          <td className="px-5 py-4">{tenant.owner_name || 'Não identificado'}</td>
-                          <td className="px-5 py-4 text-slate-400">{tenant.owner_email || '—'}</td>
-                          <td className="px-5 py-4 whitespace-nowrap">{formatRegistrationDate(tenant.registered_at)}</td>
-                          <td className="px-5 py-4 whitespace-nowrap">
-                            {isAdminTenant ? (
-                              <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-300">
-                                Vitalício (Admin)
-                              </span>
-                            ) : (
-                              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${trialInfo.badgeClass}`}>
-                                {trialInfo.label}
-                              </span>
+                        <tr key={tenant.id} className="text-slate-200 hover:bg-slate-950/40 transition-colors">
+                          {/* Coluna 1: Família & Contato */}
+                          <td className="px-4 py-4 align-top">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white">{tenant.name}</span>
+                              {hotLead && (
+                                <span
+                                  title="Família em período de teste usando ativamente o sistema"
+                                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-extrabold text-amber-300"
+                                >
+                                  <Flame className="h-3 w-3" /> Lead Quente
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-300 mt-0.5">
+                              {tenant.owner_name || 'Não identificado'} •{' '}
+                              <span className="text-slate-400">{tenant.owner_email || '—'}</span>
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+                              <span>Cad.: {formatRegistrationDate(tenant.registered_at)}</span>
+                              {tenant.owner_phone && (
+                                <span className="text-emerald-400 font-semibold">📱 {tenant.owner_phone}</span>
+                              )}
+                            </div>
+                            {tenant.admin_notes && (
+                              <p className="mt-1.5 rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-[11px] text-amber-200/90 max-w-xs truncate">
+                                📝 {tenant.admin_notes}
+                              </p>
                             )}
                           </td>
-                          <td className="px-5 py-4">
-                            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                              isBlocked ? 'bg-rose-500/10 text-rose-300' : 'bg-emerald-500/10 text-emerald-300'
-                            }`}>
+
+                          {/* Coluna 2: Engajamento */}
+                          <td className="px-4 py-4 align-top">
+                            <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                              <span className="rounded-lg bg-slate-950 border border-slate-800 px-2 py-0.5 text-slate-300">
+                                👥 {membersCount} {membersCount === 1 ? 'membro' : 'membros'}
+                              </span>
+                              <span
+                                className={`rounded-lg border px-2 py-0.5 ${
+                                  txCount > 0
+                                    ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                                    : 'bg-slate-950 border-slate-800 text-slate-400'
+                                }`}
+                              >
+                                📊 {txCount} lanç.
+                              </span>
+                              <span className="rounded-lg bg-slate-950 border border-slate-800 px-2 py-0.5 text-slate-300">
+                                💳 {cardsCount} cartões
+                              </span>
+                            </div>
+                            <p className="mt-1.5 text-[11px] text-slate-400">
+                              {tenant.last_transaction_date
+                                ? `Último lanç.: ${formatShortDate(tenant.last_transaction_date)}`
+                                : 'Nenhum lançamento ainda'}
+                            </p>
+                          </td>
+
+                          {/* Coluna 3: Plano Atual */}
+                          <td className="px-4 py-4 align-top whitespace-nowrap">
+                            {isAdminTenant ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                                <Crown className="h-3.5 w-3.5" /> Admin Vitalício
+                              </span>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${PLAN_BADGE_CLASSES[plan]}`}>
+                                  {PLAN_LABELS[plan]}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={isUpdating}
+                                    onClick={() =>
+                                      handleQuickCommercialAction(
+                                        tenant,
+                                        { activate_cycle: 'MONTHLY' },
+                                        `Plano Mensal (R$ 29,90) ativado para ${tenant.name}.`
+                                      )
+                                    }
+                                    title="Ativar Plano Mensal (+30 dias)"
+                                    className="rounded bg-slate-800 hover:bg-emerald-500/20 hover:text-emerald-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
+                                  >
+                                    +Mensal
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isUpdating}
+                                    onClick={() =>
+                                      handleQuickCommercialAction(
+                                        tenant,
+                                        { activate_cycle: 'ANNUAL' },
+                                        `Plano Anual (R$ 298,80) ativado para ${tenant.name}.`
+                                      )
+                                    }
+                                    title="Ativar Plano Anual (+1 ano)"
+                                    className="rounded bg-slate-800 hover:bg-amber-500/20 hover:text-amber-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
+                                  >
+                                    +Anual
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Coluna 4: Prazo (Teste 10d / Assinatura) */}
+                          <td className="px-4 py-4 align-top whitespace-nowrap">
+                            {isAdminTenant ? (
+                              <span className="text-xs text-slate-400">Sem vencimento</span>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${trialInfo.badgeClass}`}>
+                                  {trialInfo.label}
+                                </span>
+                                {plan === 'TRIAL' && (
+                                  <div>
+                                    <button
+                                      type="button"
+                                      disabled={isUpdating}
+                                      onClick={() =>
+                                        handleQuickCommercialAction(
+                                          tenant,
+                                          { extend_trial_days: 5 },
+                                          `+5 dias de teste liberados para ${tenant.name}.`
+                                        )
+                                      }
+                                      className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-sky-500/20 hover:text-sky-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
+                                    >
+                                      <CalendarPlus className="h-3 w-3" /> +5 dias de teste
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Coluna 5: Status */}
+                          <td className="px-4 py-4 align-top whitespace-nowrap">
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                                isBlocked ? 'bg-rose-500/10 text-rose-300' : 'bg-emerald-500/10 text-emerald-300'
+                              }`}
+                            >
                               {isBlocked ? 'Bloqueado' : 'Ativo'}
                             </span>
                           </td>
-                          <td className="px-5 py-4">
-                            <button
-                              type="button"
-                              disabled={isUpdating || isAdminTenant}
-                              onClick={() => setTenantBlocked(tenant)}
-                              className={`inline-flex items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-60 ${
-                                isBlocked
-                                  ? 'border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10'
-                                  : 'border-rose-500/30 text-rose-300 hover:bg-rose-500/10'
-                              }`}
-                            >
-                              {isUpdating ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : isBlocked ? (
-                                <Unlock className="h-3.5 w-3.5" />
-                              ) : (
-                                <Ban className="h-3.5 w-3.5" />
+
+                          {/* Coluna 6: Ações Rápidas & CRM */}
+                          <td className="px-4 py-4 align-top whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              {!isAdminTenant && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setWhatsAppTenant(tenant)}
+                                    title="Abordar cliente no WhatsApp com mensagem pronta"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                                  >
+                                    <MessageCircle className="h-3.5 w-3.5" />
+                                    WhatsApp
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => openCrmModal(tenant)}
+                                    title="Gerenciar Plano, Notas CRM e Senha"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs font-bold text-slate-200 hover:bg-slate-700 transition-colors cursor-pointer"
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5" />
+                                    CRM / Suporte
+                                  </button>
+                                </>
                               )}
-                              {isAdminTenant ? 'Conta administrativa' : isBlocked ? 'Desbloquear' : 'Bloquear'}
-                            </button>
+
+                              <button
+                                type="button"
+                                disabled={isUpdating || isAdminTenant}
+                                onClick={() => setTenantBlocked(tenant)}
+                                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-60 cursor-pointer ${
+                                  isBlocked
+                                    ? 'border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10'
+                                    : 'border-rose-500/30 text-rose-300 hover:bg-rose-500/10'
+                                }`}
+                              >
+                                {isUpdating ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : isBlocked ? (
+                                  <Unlock className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Ban className="h-3.5 w-3.5" />
+                                )}
+                                {isAdminTenant ? 'Conta administrativa' : isBlocked ? 'Desbloquear' : 'Bloquear'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
                     })}
-                    {tenants.length === 0 && (
+                    {filteredTenants.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
-                          Nenhum tenant encontrado.
+                        <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                          Nenhum tenant encontrado para o filtro selecionado.
                         </td>
                       </tr>
                     )}
@@ -315,6 +1121,214 @@ export default function InternalTenantReportPage() {
           </div>
         )}
       </div>
+
+      {/* ================= MODAL DE TEMPLATES DE WHATSAPP ================= */}
+      {whatsAppTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-emerald-400">Abordagem Comercial WhatsApp</p>
+                <h3 className="text-lg font-extrabold text-white">{whatsAppTenant.name}</h3>
+                <p className="text-xs text-slate-400">
+                  Responsável: {whatsAppTenant.owner_name || 'Cliente'} ({whatsAppTenant.owner_phone || 'Sem telefone cadastrado'})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWhatsAppTenant(null)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              {[
+                {
+                  title: '1. Boas-vindas ao Teste Grátis (10 dias)',
+                  text: `Olá ${whatsAppTenant.owner_name || ''}! Tudo bem? Aqui é o Jefferson, fundador do FinanFamily. Vi que você criou a conta da ${whatsAppTenant.name}. Seus 10 dias de teste grátis já estão liberados! Se precisar de qualquer ajuda para configurar suas contas, cartões ou convidar sua família, pode contar comigo.`,
+                },
+                {
+                  title: '2. Reta Final dos 10 Dias de Teste',
+                  text: `Olá ${whatsAppTenant.owner_name || ''}! Passando para lembrar que o período de teste grátis de 10 dias da ${whatsAppTenant.name} no FinanFamily está chegando ao fim. Gostaria de continuar com o Plano Mensal (R$ 29,90/mês) ou aproveitar o Plano Anual com desconto por R$ 298,80 (em até 12x de R$ 24,90 no cartão)?`,
+                },
+                {
+                  title: '3. Teste de 10 Dias Encerrado (Oferta de Ativação)',
+                  text: `Olá ${whatsAppTenant.owner_name || ''}! O período de avaliação gratuita de 10 dias do FinanFamily encerrou. Para manter o painel da ${whatsAppTenant.name} ativo sem perder seus lançamentos, você pode escolher:\n• Plano Mensal: R$ 29,90/mês\n• Plano Anual: R$ 298,80/ano (12x de R$ 24,90 no cartão)\nQual opção prefere para eu gerar seu link de pagamento?`,
+                },
+                {
+                  title: '4. Lembrete de Renovação de Assinatura',
+                  text: `Olá ${whatsAppTenant.owner_name || ''}! Tudo bem? Passando para avisar que a assinatura do FinanFamily da ${whatsAppTenant.name} está próxima da renovação. Posso enviar o link/Pix para mantermos seu acesso ativo?`,
+                },
+              ].map(template => (
+                <div
+                  key={template.title}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-3.5 flex flex-col gap-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white">{template.title}</span>
+                    <a
+                      href={buildWhatsAppUrl(whatsAppTenant.owner_phone, template.text)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-extrabold text-slate-950 hover:bg-emerald-400"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" /> Enviar no WhatsApp
+                    </a>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed whitespace-pre-line">{template.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL CRM / SUPORTE DA FAMÍLIA ================= */}
+      {selectedTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-xl rounded-3xl border border-slate-800 bg-slate-900 p-6 sm:p-7 shadow-2xl space-y-6 my-8">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase text-emerald-400">Ficha Comercial & Suporte</p>
+                <h3 className="text-xl font-extrabold text-white">{selectedTenant.name}</h3>
+                <p className="text-xs text-slate-400">
+                  {selectedTenant.owner_name} • {selectedTenant.owner_email}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTenant(null)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={saveCrmDetails} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1.5">
+                    Plano Comercial
+                  </label>
+                  <select
+                    value={crmPlanType}
+                    onChange={e => setCrmPlanType(e.target.value as PlanType)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                  >
+                    <option value="TRIAL">Teste Grátis (10 dias)</option>
+                    <option value="MONTHLY">Plano Mensal (R$ 29,90/mês)</option>
+                    <option value="ANNUAL">Plano Anual (R$ 298,80/ano)</option>
+                    <option value="COURTESY">Cortesia / Parceiro (Isento)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1.5">
+                    WhatsApp / Telefone do Cliente
+                  </label>
+                  <input
+                    type="tel"
+                    maxLength={30}
+                    value={crmOwnerPhone}
+                    onChange={e => setCrmOwnerPhone(e.target.value)}
+                    placeholder="(41) 99999-9999"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1.5">
+                    Fim do Teste Grátis
+                  </label>
+                  <input
+                    type="date"
+                    value={crmTrialEndsAt}
+                    onChange={e => setCrmTrialEndsAt(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1.5">
+                    Vencimento da Assinatura Paga
+                  </label>
+                  <input
+                    type="date"
+                    value={crmSubscriptionEndsAt}
+                    onChange={e => setCrmSubscriptionEndsAt(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1.5">
+                  Anotações Internas (CRM / Pagamentos / Histórico)
+                </label>
+                <textarea
+                  rows={3}
+                  maxLength={1000}
+                  value={crmAdminNotes}
+                  onChange={e => setCrmAdminNotes(e.target.value)}
+                  placeholder="Ex.: Pagou plano anual no cartão em 21/10. Cliente veio por indicação..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3.5 text-sm text-white outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTenant(null)}
+                  className="rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingCrm}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-xs font-extrabold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 cursor-pointer"
+                >
+                  {savingCrm ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Salvar Dados Comerciais
+                </button>
+              </div>
+            </form>
+
+            {/* Suporte: Redefinição de Senha do Cliente */}
+            <div className="border-t border-slate-800 pt-5">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase text-amber-300 mb-2">
+                <KeyRound className="h-4 w-4" />
+                <span>Suporte Rápido: Definir Senha Temporária</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">
+                Caso o responsável ({selectedTenant.owner_email}) não consiga acessar, defina uma senha provisória abaixo:
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <input
+                  type="text"
+                  value={tempPassword}
+                  onChange={e => setTempPassword(e.target.value)}
+                  placeholder="Nova senha (mín. 6 caracteres)"
+                  className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+                />
+                <button
+                  type="button"
+                  disabled={resettingPassword || tempPassword.trim().length < 6}
+                  onClick={handleResetOwnerPassword}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/15 px-4 py-2.5 text-xs font-extrabold text-amber-300 hover:bg-amber-500/25 disabled:opacity-50 cursor-pointer"
+                >
+                  {resettingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                  Redefinir Senha
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -22,6 +22,10 @@ export interface FamilyAccess {
   familyId: string;
   role: 'OWNER' | 'MEMBER';
   permissions: Record<string, boolean>;
+  broadcast?: {
+    message: string;
+    type: 'INFO' | 'SUCCESS' | 'WARNING';
+  };
 }
 
 export interface SettlementEntry {
