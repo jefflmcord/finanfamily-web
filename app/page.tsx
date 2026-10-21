@@ -51,6 +51,11 @@ const subscribeToInterfaceTheme = (onChange: () => void) => {
 
 const FAQ_ITEMS = [
   {
+    question: 'Como funcionam os 10 dias grátis e os planos de assinatura?',
+    answer:
+      'Ao criar sua conta, sua família ganha 10 dias de teste grátis com acesso liberado a 100% das funcionalidades. Após o período de avaliação, você pode escolher entre o Plano Mensal por R$ 29,90/mês ou o Plano Anual por R$ 298,80/ano (que equivale a apenas R$ 24,90/mês e pode ser parcelado em até 12x no cartão de crédito).',
+  },
+  {
     question: 'Como funciona o compartilhamento com meu cônjuge ou familiares?',
     answer:
       'Ao criar sua conta, um ambiente exclusivo da sua família é provisionado automaticamente. Você pode enviar convites por link para seu parceiro(a) ou filhos e definir permissões individuais (quem pode apenas consultar, criar lançamentos, baixar contas ou gerenciar cartões).',
@@ -119,7 +124,7 @@ export default function LandingPage() {
               Como Funciona
             </a>
             <a href="#planos" className="hover:text-emerald-400 transition-colors">
-              Acesso Grátis
+              Planos
             </a>
             <a href="#faq" className="hover:text-emerald-400 transition-colors">
               Dúvidas
@@ -144,10 +149,10 @@ export default function LandingPage() {
               Entrar
             </Link>
             <Link
-              href="/primeiro-acesso"
+              href="/login"
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:scale-[1.02]"
             >
-              <span>Começar Grátis</span>
+              <span>Testar 10 Dias Grátis</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <button
@@ -178,7 +183,7 @@ export default function LandingPage() {
                 Como Funciona
               </a>
               <a href="#planos" onClick={() => setMobileNavOpen(false)} className="py-1 hover:text-emerald-400">
-                Acesso Grátis
+                Planos & Preços
               </a>
               <a href="#faq" onClick={() => setMobileNavOpen(false)} className="py-1 hover:text-emerald-400">
                 Dúvidas Frequentes
@@ -192,10 +197,10 @@ export default function LandingPage() {
                 Já tenho conta (Entrar)
               </Link>
               <Link
-                href="/primeiro-acesso"
+                href="/login"
                 className="w-full text-center py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-sm font-extrabold"
               >
-                Criar Conta Grátis
+                Testar 10 Dias Grátis
               </Link>
             </div>
           </div>
@@ -210,7 +215,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-bold mb-6 shadow-sm">
             <Sparkles className="w-4 h-4 text-emerald-400" />
-            <span>Gestão financeira familiar multi-membro • Projeção de 12 meses • Kanban</span>
+            <span>10 dias grátis com acesso total • A partir de R$ 24,90/mês no plano anual</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white max-w-4xl mx-auto leading-[1.12] mb-6">
@@ -227,30 +232,30 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
             <Link
-              href="/primeiro-acesso"
+              href="/login"
               className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-8 py-4 rounded-2xl flex items-center justify-center gap-2.5 text-base transition-all shadow-[0_8px_30px_rgba(16,185,129,0.35)] hover:scale-[1.02]"
             >
-              Criar Conta da Família Grátis
+              Começar 10 Dias Grátis
               <ArrowRight className="w-5 h-5" />
             </Link>
-            <Link
-              href="/login"
+            <a
+              href="#planos"
               className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-bold px-8 py-4 rounded-2xl border border-slate-800 transition-all text-base shadow-sm"
             >
-              Entrar na Minha Conta
-            </Link>
+              Conhecer Planos e Preços
+            </a>
           </div>
 
           {/* Métricas rápidas de confiança */}
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs font-semibold text-slate-400 mb-12">
             <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Login rápido com Google
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> 10 dias grátis para testar tudo
             </span>
             <span className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Convite de membros com permissões
             </span>
             <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Exportação PDF & Excel (.xlsx)
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Até 12x no cartão no plano anual
             </span>
           </div>
 
@@ -900,10 +905,10 @@ export default function LandingPage() {
 
             <div className="pt-4">
               <Link
-                href="/primeiro-acesso"
+                href="/login"
                 className="inline-flex bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-7 py-3.5 rounded-xl items-center gap-2 transition-all shadow-lg"
               >
-                Começar Agora com Minha Família
+                Testar 10 Dias Grátis com Minha Família
                 <ArrowRight className="w-5 h-5" />
               </Link>
             </div>
@@ -919,7 +924,7 @@ export default function LandingPage() {
               Comece em menos de 1 minuto
             </h2>
             <p className="text-slate-400 text-base">
-              Sem configurações complicadas. O FinanFamily já prepara a estrutura inicial para você.
+              Sem configurações complicadas. Aproveite 10 dias grátis para testar todos os recursos com a sua família.
             </p>
           </div>
 
@@ -928,9 +933,10 @@ export default function LandingPage() {
               <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500 text-slate-950 font-black text-base mb-5">
                 1
               </span>
-              <h3 className="text-lg font-bold text-white mb-2">Crie sua conta grátis</h3>
+              <h3 className="text-lg font-bold text-white mb-2">Ative seus 10 dias grátis</h3>
               <p className="text-slate-400 text-sm">
-                Entre com sua conta Google ou e-mail. Seu ambiente familiar isolado já nasce pronto para uso.
+                Entre com sua conta Google ou e-mail. Seu ambiente familiar isolado já nasce pronto com todos os
+                recursos liberados para teste.
               </p>
             </div>
 
@@ -949,10 +955,10 @@ export default function LandingPage() {
               <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500 text-slate-950 font-black text-base mb-5">
                 3
               </span>
-              <h3 className="text-lg font-bold text-white mb-2">Convide a família e acompanhe</h3>
+              <h3 className="text-lg font-bold text-white mb-2">Convide a família e escolha seu plano</h3>
               <p className="text-slate-400 text-sm">
-                Compartilhe o acesso com quem você ama e acompanhe o velocímetro de comprometimento e a projeção de 12
-                meses.
+                Compartilhe o acesso com quem você ama e, após os 10 dias de teste grátis, continue no plano mensal ou
+                anual com desconto.
               </p>
             </div>
           </div>
@@ -961,67 +967,147 @@ export default function LandingPage() {
 
       {/* ================= SEÇÃO DE PLANOS ================= */}
       <section id="planos" className="py-24 px-4 sm:px-6 bg-slate-950 border-t border-slate-800/80">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-6xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-extrabold uppercase tracking-wider mb-4">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>10 Dias de Teste Grátis em Qualquer Plano</span>
+          </div>
+
           <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4">
-            Organize as finanças da família hoje mesmo
+            Investimento simples e transparente para toda a família
           </h2>
-          <p className="text-slate-400 text-base mb-12">
-            Crie sua conta em segundos utilizando o Google ou seu e-mail. Sem burocracia.
+          <p className="text-slate-400 text-base max-w-2xl mx-auto mb-14">
+            Teste 100% dos recursos gratuitamente por <strong className="text-white">10 dias</strong>. Após o período de
+            testes, escolha entre a flexibilidade do plano mensal ou a economia do plano anual em até 12x.
           </p>
 
-          <div className="bg-slate-900 border-2 border-emerald-500/40 rounded-3xl p-8 sm:p-10 shadow-[0_20px_60px_rgba(16,185,129,0.12)] max-w-2xl mx-auto text-left relative">
-            <div className="absolute -top-3.5 right-6 bg-emerald-500 text-slate-950 text-xs font-extrabold px-3.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
-              Acesso Completo
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 mb-6 border-b border-slate-800">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto text-left items-stretch">
+            {/* PLANO MENSAL */}
+            <div className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-8 sm:p-9 flex flex-col justify-between shadow-xl relative transition-all">
               <div>
-                <h3 className="text-2xl font-extrabold text-white">Plano Família Completo</h3>
-                <p className="text-slate-400 text-sm mt-1">
-                  Todos os módulos liberados para transformar a gestão financeira da sua casa.
-                </p>
-              </div>
-              <div className="sm:text-right">
-                <span className="text-xs uppercase font-bold text-emerald-400 block">Comece agora</span>
-                <span className="text-3xl font-black text-white">Grátis</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-8 text-sm text-slate-200 font-medium">
-              {[
-                'Painel Web compartilhado pela família',
-                'Convite de membros com permissões',
-                'Projeção de saldo futuro (12 meses)',
-                'Kanban de Contas a Pagar e baixa em lote',
-                'Gestão inteligente de Cartões e Faturas',
-                'Orçamento mensal por categoria com alertas',
-                'Provisões anuais (IPVA, IPTU, Férias)',
-                'Exportação em PDF, Excel (.xlsx) e Impressão',
-              ].map(item => (
-                <div key={item} className="flex items-center gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-                    <Check className="w-3.5 h-3.5" />
-                  </div>
-                  <span>{item}</span>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                    Flexibilidade Mensal
+                  </span>
+                  <span className="text-xs font-bold text-emerald-400">10 dias grátis</span>
                 </div>
-              ))}
-            </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                href="/primeiro-acesso"
-                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 text-base transition-all shadow-[0_8px_25px_rgba(16,185,129,0.3)] hover:scale-[1.01]"
-              >
-                Criar Minha Conta Grátis Agora
-                <ArrowRight className="w-5 h-5" />
-              </Link>
+                <h3 className="text-2xl font-extrabold text-white">Plano Mensal</h3>
+                <p className="text-slate-400 text-sm mt-1">
+                  Ideal para começar sem fidelidade e renovar mês a mês.
+                </p>
+
+                <div className="my-6 pb-6 border-b border-slate-800">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-sm font-bold text-slate-400">R$</span>
+                    <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">29,90</span>
+                    <span className="text-sm font-semibold text-slate-400">/mês</span>
+                  </div>
+                  <p className="text-xs text-emerald-400 font-semibold mt-2">
+                    Grátis nos primeiros 10 dias • Cobrança mensal após o período de testes
+                  </p>
+                </div>
+
+                <div className="space-y-3 mb-8 text-sm text-slate-200 font-medium">
+                  {[
+                    '10 dias de teste grátis com acesso completo',
+                    'Painel Web compartilhado pela família',
+                    'Convite de membros com permissões granulares',
+                    'Projeção de saldo futuro para 12 meses',
+                    'Kanban de Contas a Pagar e baixa em lote',
+                    'Gestão inteligente de Cartões e Faturas',
+                    'Orçamento mensal por categoria + Provisões anuais',
+                    'Exportação em PDF, Excel (.xlsx) e Impressão',
+                  ].map(item => (
+                    <div key={item} className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                        <Check className="w-3.5 h-3.5" />
+                      </div>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <Link
                 href="/login"
-                className="sm:w-auto bg-slate-950 hover:bg-slate-800 text-white font-bold py-4 px-6 rounded-2xl border border-slate-800 flex items-center justify-center text-sm transition-colors"
+                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-extrabold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 text-base transition-all border border-slate-700"
               >
-                Já tenho conta
+                Começar 10 Dias Grátis
+                <ArrowRight className="w-5 h-5" />
               </Link>
             </div>
+
+            {/* PLANO ANUAL (MAIS VANTAJOSO) */}
+            <div className="bg-slate-900 border-2 border-emerald-500 rounded-3xl p-8 sm:p-9 flex flex-col justify-between shadow-[0_20px_60px_rgba(16,185,129,0.16)] relative transition-all">
+              <div className="absolute -top-3.5 right-6 bg-emerald-500 text-slate-950 text-xs font-extrabold px-4 py-1 rounded-full uppercase tracking-wider shadow-md">
+                Mais Escolhido • Economize 17%
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    Plano Anual (Até 12x no Cartão)
+                  </span>
+                  <span className="text-xs font-bold text-emerald-400">10 dias grátis</span>
+                </div>
+
+                <h3 className="text-2xl font-extrabold text-white">Plano Anual Família</h3>
+                <p className="text-slate-400 text-sm mt-1">
+                  O melhor custo-benefício para planejar o ano inteiro da família com desconto.
+                </p>
+
+                <div className="my-6 pb-6 border-b border-slate-800">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-sm font-bold text-emerald-400">12x de R$</span>
+                    <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">24,90</span>
+                    <span className="text-sm font-semibold text-slate-400">/mês</span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-semibold mt-2">
+                    Total de <strong className="text-white">R$ 298,80/ano</strong> (parcelável em até 12x no cartão)
+                  </p>
+                  <p className="text-xs text-emerald-400 font-bold mt-1">
+                    Grátis nos primeiros 10 dias • Economia de R$ 60,00 por ano
+                  </p>
+                </div>
+
+                <div className="space-y-3 mb-8 text-sm text-slate-200 font-medium">
+                  {[
+                    '10 dias de teste grátis com acesso completo',
+                    'Tudo do Plano Mensal incluso sem restrições',
+                    'Parcelamento em até 12x de R$ 24,90 no cartão',
+                    'Painel Web compartilhado + Convite de membros',
+                    'Projeção de saldo de 12 meses + Detector de juros',
+                    'Kanban de Contas a Pagar + Baixa em lote',
+                    'Gestão de Cartões, Orçamentos e Provisões Anuais',
+                    'Exportação ilimitada em PDF, Excel (.xlsx) e WhatsApp',
+                  ].map(item => (
+                    <div key={item} className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <Check className="w-3.5 h-3.5" />
+                      </div>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Link
+                href="/login"
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 text-base transition-all shadow-[0_8px_25px_rgba(16,185,129,0.35)] hover:scale-[1.01]"
+              >
+                Testar 10 Dias Grátis no Plano Anual
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-8 inline-flex flex-wrap items-center justify-center gap-3 px-5 py-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300">
+            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>
+              Comece agora com <strong>10 dias grátis</strong>. Após o período de testes: <strong>R$ 29,90/mês</strong>{' '}
+              ou <strong>R$ 298,80/ano</strong> (12x de R$ 24,90 no cartão).
+            </span>
           </div>
         </div>
       </section>
@@ -1031,7 +1117,7 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-3">Perguntas Frequentes</h2>
-            <p className="text-slate-400 text-sm">Tire suas dúvidas sobre o funcionamento do FinanFamily.</p>
+            <p className="text-slate-400 text-sm">Tire suas dúvidas sobre o período de testes, planos e recursos.</p>
           </div>
 
           <div className="space-y-3">
@@ -1084,11 +1170,14 @@ export default function LandingPage() {
             <a href="#recursos" className="hover:text-emerald-400 transition-colors">
               Funcionalidades
             </a>
+            <a href="#planos" className="hover:text-emerald-400 transition-colors">
+              Planos
+            </a>
             <Link href="/login" className="hover:text-emerald-400 transition-colors">
               Entrar
             </Link>
-            <Link href="/primeiro-acesso" className="hover:text-emerald-400 transition-colors">
-              Criar Conta Grátis
+            <Link href="/login" className="hover:text-emerald-400 transition-colors">
+              Testar 10 Dias Grátis
             </Link>
           </div>
         </div>
