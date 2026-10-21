@@ -111,9 +111,38 @@ export default function InternalTenantReportPage() {
       : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
   };
 
+  const getTrialInfo = (registeredAt: string | null) => {
+    if (!registeredAt) return { label: 'Sem data', badgeClass: 'bg-slate-800 text-slate-400', expired: false };
+    const start = new Date(registeredAt);
+    if (Number.isNaN(start.getTime())) {
+      return { label: 'Data inválida', badgeClass: 'bg-slate-800 text-slate-400', expired: false };
+    }
+    const elapsedDays = Math.max(0, Math.floor((Date.now() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    const remainingDays = 10 - elapsedDays;
+    if (remainingDays > 2) {
+      return {
+        label: `Dia ${elapsedDays + 1}/10 (${remainingDays}d restantes)`,
+        badgeClass: 'bg-sky-500/10 text-sky-300 border border-sky-500/20',
+        expired: false,
+      };
+    }
+    if (remainingDays >= 0) {
+      return {
+        label: remainingDays === 0 ? 'Último dia (10/10)' : `Dia ${elapsedDays + 1}/10 (${remainingDays}d restante)`,
+        badgeClass: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+        expired: false,
+      };
+    }
+    return {
+      label: `${elapsedDays} dias (+${Math.abs(remainingDays)}d após teste)`,
+      badgeClass: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
+      expired: true,
+    };
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <Link
           href="/dashboard"
           className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-400 transition-colors hover:text-white"
@@ -132,7 +161,7 @@ export default function InternalTenantReportPage() {
             </div>
           </div>
           <p className="mt-3 text-sm text-slate-400">
-            Acompanhe os cadastros e controle o acesso dos tenants. O bloqueio vale para todos os membros da família.
+            Acompanhe os cadastros, o prazo do teste grátis de 10 dias e controle manualmente o acesso dos tenants. O bloqueio vale para todos os membros da família.
           </p>
         </header>
 
@@ -188,19 +217,31 @@ export default function InternalTenantReportPage() {
             </section>
 
             <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-              <div className="border-b border-slate-800 px-5 py-4">
+              <div className="border-b border-slate-800 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-white">
                   {tenants.length} {tenants.length === 1 ? 'tenant cadastrado' : 'tenants cadastrados'}
                 </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                  <span className="rounded-full bg-sky-500/10 border border-sky-500/20 px-3 py-1 text-sky-300">
+                    Em teste (≤ 10d): {tenants.filter(t => !t.blocked_at && !getTrialInfo(t.registered_at).expired).length}
+                  </span>
+                  <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-amber-300">
+                    Acima de 10 dias (Ativos): {tenants.filter(t => !t.blocked_at && getTrialInfo(t.registered_at).expired).length}
+                  </span>
+                  <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-3 py-1 text-rose-300">
+                    Bloqueados: {tenants.filter(t => Boolean(t.blocked_at)).length}
+                  </span>
+                </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-left text-sm">
+                <table className="w-full min-w-[980px] text-left text-sm">
                   <thead className="bg-slate-950/70 text-xs uppercase tracking-wide text-slate-400">
                     <tr>
                       <th scope="col" className="px-5 py-3 font-bold">Família</th>
                       <th scope="col" className="px-5 py-3 font-bold">Usuário principal</th>
                       <th scope="col" className="px-5 py-3 font-bold">E-mail</th>
                       <th scope="col" className="px-5 py-3 font-bold">Data de cadastro</th>
+                      <th scope="col" className="px-5 py-3 font-bold">Teste (10 dias)</th>
                       <th scope="col" className="px-5 py-3 font-bold">Status</th>
                       <th scope="col" className="px-5 py-3 font-bold">Ação</th>
                     </tr>
@@ -211,12 +252,24 @@ export default function InternalTenantReportPage() {
                       const isBlocked = Boolean(tenant.blocked_at);
                       const isAdminTenant = tenant.owner_email?.toLowerCase() === 'jeffersonluismattosocordeiro@gmail.com';
                       const isUpdating = updatingTenant === familyId;
+                      const trialInfo = getTrialInfo(tenant.registered_at);
                       return (
                         <tr key={tenant.id} className="text-slate-200">
                           <td className="px-5 py-4 font-semibold text-white">{tenant.name}</td>
                           <td className="px-5 py-4">{tenant.owner_name || 'Não identificado'}</td>
                           <td className="px-5 py-4 text-slate-400">{tenant.owner_email || '—'}</td>
                           <td className="px-5 py-4 whitespace-nowrap">{formatRegistrationDate(tenant.registered_at)}</td>
+                          <td className="px-5 py-4 whitespace-nowrap">
+                            {isAdminTenant ? (
+                              <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                                Vitalício (Admin)
+                              </span>
+                            ) : (
+                              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${trialInfo.badgeClass}`}>
+                                {trialInfo.label}
+                              </span>
+                            )}
+                          </td>
                           <td className="px-5 py-4">
                             <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
                               isBlocked ? 'bg-rose-500/10 text-rose-300' : 'bg-emerald-500/10 text-emerald-300'
@@ -250,7 +303,7 @@ export default function InternalTenantReportPage() {
                     })}
                     {tenants.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                        <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
                           Nenhum tenant encontrado.
                         </td>
                       </tr>
