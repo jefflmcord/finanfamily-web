@@ -144,7 +144,7 @@ function drawStepsList(doc: jsPDF, steps: EbookStep[], startY: number): number {
   return cursorY;
 }
 
-export function generateFinanFamilyEbookPdf(readerName?: string): void {
+export function createFinanFamilyEbookDoc(readerName?: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const cleanName = readerName?.trim() || 'Sua Família';
 
@@ -275,5 +275,10 @@ export function generateFinanFamilyEbookPdf(readerName?: string): void {
   doc.setTextColor(255, 255, 255);
   doc.text('Planos após o período de teste: Mensal R$ 29,90/mês ou Anual R$ 298,80 (12x de R$ 24,90).', 20, endY + 21.5);
 
+  return doc;
+}
+
+export function generateFinanFamilyEbookPdf(readerName?: string): void {
+  const doc = createFinanFamilyEbookDoc(readerName);
   doc.save('Ebook-10-Passos-FinanFamily.pdf');
 }
