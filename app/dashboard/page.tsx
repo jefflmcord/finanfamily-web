@@ -91,6 +91,7 @@ export default function DashboardPage() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
   const [userName, setUserName] = useState('Família');
   const [userEmail, setUserEmail] = useState('');
@@ -208,11 +209,17 @@ export default function DashboardPage() {
       return;
     }
 
-    setLoading(true);
     setError('');
+    let parsedLocalUser: Record<string, any> | null = null;
+    let cacheKey = '@FinanFamily:dashboardCache:default';
+
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
+        parsedLocalUser = user;
+        if (user?.id) {
+          cacheKey = `@FinanFamily:dashboardCache:${user.id}`;
+        }
         setUserName(user.name || 'Família');
         setUserEmail(typeof user.email === 'string' ? user.email : '');
         setProfile({
@@ -230,13 +237,138 @@ export default function DashboardPage() {
               ? user.picture
               : null
         );
+        if (user?.family_id) {
+          setFamilyId(String(user.family_id));
+          setFamilyAccess(prev =>
+            prev || {
+              familyId: String(user.family_id),
+              role: 'OWNER',
+              permissions: {
+                family_read: true,
+                transactions_create: true,
+                transactions_edit: true,
+                transactions_delete: true,
+                transactions_settle: true,
+                accounts_manage: true,
+                cards_manage: true,
+                categories_manage: true,
+                goals_manage: true,
+                provisions_manage: true,
+                members_manage: true,
+              },
+            }
+          );
+        }
       } catch (parseError) {
         console.error('Não foi possível ler o perfil salvo da sessão:', parseError);
       }
     }
 
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && typeof cached === 'object') {
+            if (cached.access) {
+              setFamilyAccess(cached.access);
+              setFamilyId(String(cached.access.familyId));
+            }
+            if (Array.isArray(cached.accounts)) setAccounts(cached.accounts);
+            if (Array.isArray(cached.categories)) setCategories(cached.categories);
+            if (Array.isArray(cached.creditCards)) setCreditCards(cached.creditCards);
+            if (Array.isArray(cached.transactions)) setTransactions(cached.transactions);
+            setLoading(false);
+          }
+        } else if (parsedLocalUser?.family_id) {
+          setLoading(false);
+        }
+      } catch {
+        // Ignore invalid local cache
+      }
+    }
+
+    setSyncing(true);
+
+    const applyProfileData = (profileData: any) => {
+      if (!profileData || typeof profileData !== 'object') return;
+      const loadedProfile: UserProfile = {
+        name: typeof profileData.name === 'string' ? profileData.name : '',
+        email: typeof profileData.email === 'string' ? profileData.email : '',
+        phone: typeof profileData.phone === 'string' ? profileData.phone : '',
+        avatar_url: typeof profileData.avatar_url === 'string' ? profileData.avatar_url : '',
+        birth_date: typeof profileData.birth_date === 'string' ? profileData.birth_date.slice(0, 10) : '',
+        bio: typeof profileData.bio === 'string' ? profileData.bio : '',
+      };
+      setProfile(loadedProfile);
+      setUserName(loadedProfile.name || 'Família');
+      setUserEmail(loadedProfile.email);
+      setUserAvatarUrl(loadedProfile.avatar_url || null);
+
+      const mergedUser = { ...(parsedLocalUser || {}), ...profileData };
+      localStorage.setItem('@FinanFamily:user', JSON.stringify(mergedUser));
+    };
+
     try {
-      const accessRes = await authenticatedFetch(`${API_URL}/api/family/access`);
+      const bootstrapRes = await authenticatedFetch(`${API_URL}/api/family/bootstrap`);
+
+      if (bootstrapRes.status !== 404) {
+        const bootstrapData = await bootstrapRes.json();
+        if (bootstrapData.code === 'TENANT_BLOCKED') {
+          sessionStorage.setItem('@FinanFamily:blockedContactPhone', bootstrapData.contact_phone || '(41) 0000-0000');
+          router.replace('/acesso-indisponivel');
+          return;
+        }
+        if (!bootstrapRes.ok) {
+          throw new Error(bootstrapData.error || 'Não foi possível carregar os dados da família.');
+        }
+
+        const accessData = bootstrapData.access;
+        setFamilyAccess(accessData);
+        setFamilyId(String(accessData.familyId));
+        if (bootstrapData.profile) {
+          applyProfileData(bootstrapData.profile);
+        }
+
+        const nextAccounts = Array.isArray(bootstrapData.accounts) ? bootstrapData.accounts : [];
+        const nextCategories = Array.isArray(bootstrapData.categories) ? bootstrapData.categories : [];
+        const nextCards = Array.isArray(bootstrapData.creditCards) ? bootstrapData.creditCards : [];
+        const nextTransactions = Array.isArray(bootstrapData.transactions) ? bootstrapData.transactions : [];
+
+        setAccounts(nextAccounts);
+        setCategories(nextCategories);
+        setCreditCards(nextCards);
+        setTransactions(nextTransactions);
+
+        try {
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              access: accessData,
+              accounts: nextAccounts,
+              categories: nextCategories,
+              creditCards: nextCards,
+              transactions: nextTransactions,
+              updatedAt: Date.now(),
+            })
+          );
+        } catch {
+          // Ignore storage quota errors
+        }
+        return;
+      }
+
+      // Fallback paralelo caso o servidor ainda esteja atualizando a rota /bootstrap
+      const fallbackFamilyId = parsedLocalUser?.family_id ? String(parsedLocalUser.family_id) : '1';
+      const [accessRes, profileResponse, accountsRes, categoriesRes, cardsRes, txRes] = await Promise.all([
+        authenticatedFetch(`${API_URL}/api/family/access`),
+        authenticatedFetch(`${API_URL}/api/family/profile`),
+        authenticatedFetch(`${API_URL}/api/accounts?family_id=${encodeURIComponent(fallbackFamilyId)}`),
+        authenticatedFetch(`${API_URL}/api/categories?family_id=${encodeURIComponent(fallbackFamilyId)}`),
+        authenticatedFetch(`${API_URL}/api/credit-cards?family_id=${encodeURIComponent(fallbackFamilyId)}`),
+        authenticatedFetch(`${API_URL}/api/transactions?family_id=${encodeURIComponent(fallbackFamilyId)}`),
+      ]);
+
       const accessData = await accessRes.json();
       if (accessData.code === 'TENANT_BLOCKED') {
         sessionStorage.setItem('@FinanFamily:blockedContactPhone', accessData.contact_phone || '(41) 0000-0000');
@@ -247,39 +379,9 @@ export default function DashboardPage() {
       setFamilyAccess(accessData);
       setFamilyId(String(accessData.familyId));
 
-      try {
-        const profileResponse = await authenticatedFetch(`${API_URL}/api/family/profile`);
+      if (profileResponse.ok) {
         const profileData = await profileResponse.json();
-        if (!profileResponse.ok) throw new Error(profileData.error || 'Não foi possível carregar seu perfil.');
-        const loadedProfile: UserProfile = {
-          name: typeof profileData.name === 'string' ? profileData.name : '',
-          email: typeof profileData.email === 'string' ? profileData.email : '',
-          phone: typeof profileData.phone === 'string' ? profileData.phone : '',
-          avatar_url: typeof profileData.avatar_url === 'string' ? profileData.avatar_url : '',
-          birth_date: typeof profileData.birth_date === 'string' ? profileData.birth_date.slice(0, 10) : '',
-          bio: typeof profileData.bio === 'string' ? profileData.bio : '',
-        };
-        setProfile(loadedProfile);
-        setUserName(loadedProfile.name || 'Família');
-        setUserEmail(loadedProfile.email);
-        setUserAvatarUrl(loadedProfile.avatar_url || null);
-
-        let storedUser: Record<string, unknown> = {};
-        if (userStr) {
-          try {
-            const parsedUser: unknown = JSON.parse(userStr);
-            if (parsedUser && typeof parsedUser === 'object' && !Array.isArray(parsedUser)) {
-              storedUser = parsedUser as Record<string, unknown>;
-            }
-          } catch (storageError) {
-            console.error('Não foi possível preservar os dados locais da sessão:', storageError);
-          }
-        }
-        localStorage.setItem('@FinanFamily:user', JSON.stringify({ ...storedUser, ...profileData }));
-      } catch (profileLoadError) {
-        setProfileError(
-          profileLoadError instanceof Error ? profileLoadError.message : 'Não foi possível carregar seu perfil.'
-        );
+        applyProfileData(profileData);
       }
 
       if (accessData.role !== 'OWNER' && accessData.permissions?.family_read !== true) {
@@ -290,27 +392,21 @@ export default function DashboardPage() {
         return;
       }
 
-      const dataResponses = await Promise.all([
-        authenticatedFetch(`${API_URL}/api/accounts?family_id=${encodeURIComponent(accessData.familyId)}`),
-        authenticatedFetch(`${API_URL}/api/categories?family_id=${encodeURIComponent(accessData.familyId)}`),
-        authenticatedFetch(`${API_URL}/api/credit-cards?family_id=${encodeURIComponent(accessData.familyId)}`),
-        authenticatedFetch(`${API_URL}/api/transactions?family_id=${encodeURIComponent(accessData.familyId)}`),
+      const [nextAccounts, nextCategories, nextCards, nextTransactions] = await Promise.all([
+        accountsRes.json(),
+        categoriesRes.json(),
+        cardsRes.json(),
+        txRes.json(),
       ]);
-      const data = await Promise.all(
-        dataResponses.map(async response => {
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || 'Não foi possível carregar os dados da família.');
-          return result;
-        })
-      );
-      setAccounts(data[0]);
-      setCategories(data[1]);
-      setCreditCards(data[2]);
-      setTransactions(data[3]);
+      if (accountsRes.ok) setAccounts(nextAccounts);
+      if (categoriesRes.ok) setCategories(nextCategories);
+      if (cardsRes.ok) setCreditCards(nextCards);
+      if (txRes.ok) setTransactions(nextTransactions);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar os dados da família.');
     } finally {
       setLoading(false);
+      setSyncing(false);
     }
   }, [router]);
 
@@ -1106,6 +1202,12 @@ export default function DashboardPage() {
         />
 
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-10 pb-24 md:pb-10 max-w-7xl w-full mx-auto space-y-6 md:space-y-8">
+          {syncing && (
+            <div className="fixed bottom-4 left-4 z-40 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-slate-900/95 px-3.5 py-1.5 text-xs font-bold text-emerald-300 shadow-lg backdrop-blur-sm">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+              <span>Sincronizando dados...</span>
+            </div>
+          )}
           {familyAccess?.subscription?.planType === 'TRIAL' && (() => {
             const rawTrialEnd = familyAccess.subscription.trialEndsAt;
             const trialEndMs = rawTrialEnd ? new Date(rawTrialEnd).getTime() : NaN;

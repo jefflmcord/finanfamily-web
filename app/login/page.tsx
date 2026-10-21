@@ -40,7 +40,9 @@ export default function LoginPage() {
     if (params.get('mode') === 'register') {
       setAuthMode('register');
     }
-  }, []);
+    router.prefetch('/dashboard');
+    fetch(`${apiUrl}/?warmup=1`, { method: 'GET', keepalive: true }).catch(() => {});
+  }, [apiUrl, router]);
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     setLoading(true);

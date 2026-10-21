@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import {
   Wallet,
@@ -96,6 +96,10 @@ export default function LandingPage() {
   const [leadError, setLeadError] = useState('');
 
   const theme = useSyncExternalStore<InterfaceTheme>(subscribeToInterfaceTheme, getInterfaceTheme, () => 'dark');
+
+  useEffect(() => {
+    fetch(`${API_URL}/?warmup=1`, { method: 'GET', keepalive: true }).catch(() => {});
+  }, []);
 
   const formatPhoneInput = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 11);
