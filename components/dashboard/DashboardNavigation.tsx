@@ -21,6 +21,7 @@ import {
   Sun,
   Moon,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
 import {
@@ -39,6 +40,7 @@ interface DashboardHeaderProps {
   familyAccess: FamilyAccess | null;
   canCreateTransactions: boolean;
   onOpenNewTransaction: () => void;
+  onOpenSmartImport?: () => void;
   userName: string;
   userEmail: string;
   userAvatarUrl: string | null;
@@ -55,6 +57,7 @@ export function DashboardHeader({
   familyAccess,
   canCreateTransactions,
   onOpenNewTransaction,
+  onOpenSmartImport,
   userName,
   userEmail,
   userAvatarUrl,
@@ -141,7 +144,19 @@ export function DashboardHeader({
           </>
         )}
       </nav>
-      <div className="flex items-center gap-1 sm:gap-4">
+      <div className="flex items-center gap-1 sm:gap-3">
+        {canCreateTransactions && onOpenSmartImport && (
+          <button
+            type="button"
+            onClick={onOpenSmartImport}
+            title="Importar Extrato, Fatura em PDF ou Print de Tela"
+            className="flex bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 font-extrabold py-2 sm:py-2.5 px-2.5 sm:px-4 rounded-xl items-center gap-1.5 text-xs sm:text-sm cursor-pointer transition-all"
+          >
+            <Upload className="w-4 h-4 text-emerald-400" />
+            <span className="hidden lg:inline">Importar Extrato / Print</span>
+            <span className="lg:hidden">Importar</span>
+          </button>
+        )}
         {canCreateTransactions && (
           <button
             onClick={onOpenNewTransaction}

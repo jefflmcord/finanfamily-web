@@ -33,6 +33,7 @@ import {
   SettingsDrawer,
 } from '@/components/dashboard/DashboardNavigation';
 import DashboardOverviewTab from '@/components/dashboard/DashboardOverviewTab';
+import SmartImportModal from '@/components/dashboard/SmartImportModal';
 import {
   InvestmentGoalsSection,
   PayablesSection,
@@ -176,6 +177,8 @@ export default function DashboardPage() {
   const [txToDelete, setTxToDelete] = useState<any>(null);
   const [deleteScope, setDeleteScope] = useState<'single' | 'all'>('single');
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
+  const [smartImportDefaultTarget, setSmartImportDefaultTarget] = useState<'ACCOUNT' | 'CARD'>('ACCOUNT');
 
   useEffect(() => {
     document.documentElement.classList.toggle('theme-light', theme === 'light');
@@ -1157,6 +1160,12 @@ export default function DashboardPage() {
           setTxType(activeModule === 'receber' ? 'INCOME' : 'EXPENSE');
           setIsTxModalOpen(true);
         }}
+        onOpenSmartImport={() => {
+          setSmartImportDefaultTarget(
+            activeModule === 'cadastros' && activeSubMenu === 'cartoes' ? 'CARD' : 'ACCOUNT'
+          );
+          setIsSmartImportOpen(true);
+        }}
         userName={userName}
         userEmail={userEmail}
         userAvatarUrl={userAvatarUrl}
@@ -1312,14 +1321,28 @@ export default function DashboardPage() {
             <div className="space-y-6">
               <div className="flex flex-wrap justify-between items-center gap-3">
                 <h2 className="text-xl sm:text-2xl font-extrabold text-white">Cartões de Crédito</h2>
-                {canManageCards && (
-                  <button
-                    onClick={() => setIsCardModalOpen(true)}
-                    className="bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl"
-                  >
-                    + Novo Cartão
-                  </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {canCreateTransactions && creditCards.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSmartImportDefaultTarget('CARD');
+                        setIsSmartImportOpen(true);
+                      }}
+                      className="bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 font-bold py-2.5 px-4 rounded-xl text-sm cursor-pointer transition-all"
+                    >
+                      Importar Fatura (PDF / Print / CSV)
+                    </button>
+                  )}
+                  {canManageCards && (
+                    <button
+                      onClick={() => setIsCardModalOpen(true)}
+                      className="bg-emerald-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl cursor-pointer"
+                    >
+                      + Novo Cartão
+                    </button>
+                  )}
+                </div>
               </div>
               <CreditCardList
                 familyId={familyId}
@@ -1579,6 +1602,18 @@ export default function DashboardPage() {
             ? Math.ceil((new Date(familyAccess.subscription.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
             : null
         }
+      />
+
+      <SmartImportModal
+        isOpen={isSmartImportOpen}
+        onClose={() => setIsSmartImportOpen(false)}
+        onImported={fetchData}
+        accounts={accounts}
+        creditCards={creditCards}
+        categories={categories}
+        canCreateTransactions={canCreateTransactions}
+        canSettleTransactions={canSettleTransactions}
+        defaultTargetType={smartImportDefaultTarget}
       />
     </div>
   );
