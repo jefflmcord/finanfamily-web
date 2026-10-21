@@ -31,7 +31,12 @@ import {
   Flame,
   Share2,
   Check,
+  BookOpen,
+  Download,
+  Loader2,
 } from 'lucide-react';
+import { API_URL } from '@/lib/apiClient';
+import { generateFinanFamilyEbookPdf } from '@/lib/ebookGenerator';
 
 type HeroPreviewTab = 'overview' | 'kanban' | 'cards' | 'family';
 type InterfaceTheme = 'dark' | 'light';
@@ -82,7 +87,58 @@ export default function LandingPage() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
+  // Estado da Isca Digital (E-book 10 Passos)
+  const [leadName, setLeadName] = useState('');
+  const [leadEmail, setLeadEmail] = useState('');
+  const [leadWhatsapp, setLeadWhatsapp] = useState('');
+  const [submittingLead, setSubmittingLead] = useState(false);
+  const [leadSuccess, setLeadSuccess] = useState(false);
+  const [leadError, setLeadError] = useState('');
+
   const theme = useSyncExternalStore<InterfaceTheme>(subscribeToInterfaceTheme, getInterfaceTheme, () => 'dark');
+
+  const formatPhoneInput = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  const handleDownloadEbook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLeadError('');
+
+    const cleanEmail = leadEmail.trim().toLowerCase();
+    const digits = leadWhatsapp.replace(/\D/g, '');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setLeadError('Informe um e-mail válido para receber e baixar o e-book.');
+      return;
+    }
+    if (digits.length < 10) {
+      setLeadError('Informe seu WhatsApp completo com DDD.');
+      return;
+    }
+
+    setSubmittingLead(true);
+    try {
+      await fetch(`${API_URL}/api/public/leads/ebook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: leadName.trim() || 'Visitante',
+          email: cleanEmail,
+          whatsapp: leadWhatsapp.trim(),
+        }),
+      });
+    } catch {
+      // Mesmo se o servidor estiver acordando, liberamos o PDF imediatamente para não travar a conversão
+    } finally {
+      generateFinanFamilyEbookPdf(leadName.trim() || 'Sua Família');
+      setLeadSuccess(true);
+      setSubmittingLead(false);
+    }
+  };
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -110,7 +166,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <nav className="hidden lg:flex items-center gap-7 text-sm font-semibold text-slate-300">
+          <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-300">
             <a href="#plataforma" className="hover:text-emerald-400 transition-colors">
               Painel Interativo
             </a>
@@ -120,8 +176,12 @@ export default function LandingPage() {
             <a href="#casais" className="hover:text-emerald-400 transition-colors">
               Para Famílias
             </a>
-            <a href="#como-funciona" className="hover:text-emerald-400 transition-colors">
-              Como Funciona
+            <a
+              href="#ebook"
+              className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1.5"
+            >
+              <BookOpen className="w-4 h-4" />
+              E-book Grátis
             </a>
             <a href="#planos" className="hover:text-emerald-400 transition-colors">
               Planos
@@ -181,6 +241,13 @@ export default function LandingPage() {
               </a>
               <a href="#como-funciona" onClick={() => setMobileNavOpen(false)} className="py-1 hover:text-emerald-400">
                 Como Funciona
+              </a>
+              <a
+                href="#ebook"
+                onClick={() => setMobileNavOpen(false)}
+                className="py-1 text-emerald-400 font-bold flex items-center gap-1.5"
+              >
+                <BookOpen className="w-4 h-4" /> E-book Grátis (10 Passos)
               </a>
               <a href="#planos" onClick={() => setMobileNavOpen(false)} className="py-1 hover:text-emerald-400">
                 Planos & Preços
@@ -960,6 +1027,187 @@ export default function LandingPage() {
                 Compartilhe o acesso com quem você ama e, após os 10 dias de teste grátis, continue no plano mensal ou
                 anual com desconto.
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= ISCA DIGITAL: E-BOOK GRATUITO (10 PASSOS) ================= */}
+      <section
+        id="ebook"
+        className="py-24 px-4 sm:px-6 bg-gradient-to-b from-slate-950 via-emerald-950/15 to-slate-950 border-t border-slate-800/80 relative overflow-hidden"
+      >
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-slate-900/95 border-2 border-emerald-500/30 rounded-3xl p-6 sm:p-10 lg:p-12 shadow-[0_25px_70px_rgba(16,185,129,0.12)] grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            {/* Coluna Esquerda: Mockup 3D do E-book + Benefícios */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-extrabold uppercase tracking-wider">
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Material Gratuito em PDF • Download Imediato</span>
+              </div>
+
+              <h2 className="text-2xl sm:text-4xl font-extrabold text-white leading-tight">
+                Baixe grátis o E-book:{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
+                  10 Passos para Organizar a Vida Financeira da Família
+                </span>
+              </h2>
+
+              <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                Ainda não quer criar sua conta agora? Preparamos um guia prático e direto ao ponto para você aplicar em
+                casa com seu cônjuge e estancar de vez o dinheiro perdido com juros, faturas descontroladas e despesas
+                anuais surpresa.
+              </p>
+
+              {/* Card visual simulando a capa do E-book + Tópicos */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center pt-2">
+                <div className="sm:col-span-5 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/60 border-2 border-emerald-500/40 rounded-2xl p-5 shadow-2xl relative">
+                  <div className="w-2 h-full bg-emerald-500/40 absolute left-0 inset-y-0 rounded-l-2xl" />
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 block mb-2">
+                    GUIA OFICIAL • FINANFAMILY
+                  </span>
+                  <p className="text-lg font-black text-white leading-snug mb-3">
+                    10 Passos para Organizar a Vida Financeira da Família
+                  </p>
+                  <p className="text-[11px] text-slate-400 mb-4">
+                    Do alinhamento do casal à projeção de 12 meses sem planilhas complicadas.
+                  </p>
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                    <FileDown className="w-3.5 h-3.5" /> PDF • 3 Páginas Práticas
+                  </div>
+                </div>
+
+                <div className="sm:col-span-7 space-y-2.5 text-sm text-slate-200">
+                  {[
+                    'Como alinhar o orçamento do casal em 15 minutos por mês',
+                    'O método para zerar o "Dinheiro Queimado" com juros e multas',
+                    'Como domar o fechamento dos cartões de crédito e parcelamentos',
+                    'Como provisionar IPVA, IPTU e matrícula sem sufoco em janeiro',
+                    'Como projetar o menor saldo da família para os próximos 12 meses',
+                  ].map(topic => (
+                    <div key={topic} className="flex items-start gap-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <span className="text-xs sm:text-sm">{topic}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Coluna Direita: Formulário de Captura de Lead */}
+            <div className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xl">
+              {leadSuccess ? (
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-extrabold text-white">Seu E-book foi gerado com sucesso!</h3>
+                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    O download do arquivo <strong className="text-emerald-400">Ebook-10-Passos-FinanFamily.pdf</strong>{' '}
+                    começou automaticamente no seu dispositivo.
+                  </p>
+                  <div className="pt-2 space-y-2.5">
+                    <button
+                      type="button"
+                      onClick={() => generateFinanFamilyEbookPdf(leadName.trim() || 'Sua Família')}
+                      className="w-full py-3 px-4 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-200 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Download className="w-4 h-4 text-emerald-400" />
+                      Baixar o PDF Novamente
+                    </button>
+                    <Link
+                      href="/login"
+                      className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg transition-all"
+                    >
+                      Aproveitar e Testar 10 Dias Grátis
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleDownloadEbook} className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-white">Receba seu E-book agora</h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Informe seu e-mail e WhatsApp para liberar o download imediato do guia em PDF.
+                    </p>
+                  </div>
+
+                  {leadError && (
+                    <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-300">
+                      {leadError}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                      Seu Nome
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={100}
+                      value={leadName}
+                      onChange={e => setLeadName(e.target.value)}
+                      placeholder="Como podemos te chamar?"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                      Seu Melhor E-mail
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      maxLength={160}
+                      value={leadEmail}
+                      onChange={e => setLeadEmail(e.target.value)}
+                      placeholder="seu@email.com"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                      Seu WhatsApp (com DDD)
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={20}
+                      value={leadWhatsapp}
+                      onChange={e => setLeadWhatsapp(formatPhoneInput(e.target.value))}
+                      placeholder="(41) 99999-9999"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submittingLead}
+                    className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-4 px-6 rounded-xl flex items-center justify-center gap-2 text-sm sm:text-base transition-all shadow-[0_8px_25px_rgba(16,185,129,0.3)] hover:scale-[1.01] disabled:opacity-60 cursor-pointer"
+                  >
+                    {submittingLead ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Preparando seu PDF...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-5 h-5" />
+                        Baixar E-book Grátis em PDF
+                      </>
+                    )}
+                  </button>
+
+                  <p className="text-[11px] text-center text-slate-400 flex items-center justify-center gap-1.5">
+                    <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
+                    Seus dados estão seguros. Zero spam.
+                  </p>
+                </form>
+              )}
             </div>
           </div>
         </div>

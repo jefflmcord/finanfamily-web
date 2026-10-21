@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Ban,
+  BookOpen,
   CalendarPlus,
   CheckCircle2,
   Crown,
@@ -20,6 +21,7 @@ import {
   Search,
   ShieldAlert,
   Sparkles,
+  Trash2,
   TrendingUp,
   Unlock,
   Users,
@@ -30,6 +32,8 @@ import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 type PlanType = 'TRIAL' | 'MONTHLY' | 'ANNUAL' | 'COURTESY';
 type BroadcastType = 'INFO' | 'SUCCESS' | 'WARNING';
 type FilterTab = 'ALL' | 'HOT_TRIAL' | 'EXPIRED_TRIAL' | 'ACTIVE_TRIAL' | 'PAID' | 'COURTESY' | 'BLOCKED';
+type LeadStatus = 'NEW' | 'CONTACTED' | 'CONVERTED' | 'ARCHIVED';
+type LeadFilterTab = 'ALL' | 'NEW' | 'CONTACTED' | 'REGISTERED' | 'ARCHIVED';
 
 interface TenantReportRow {
   id: string | number;
@@ -51,10 +55,26 @@ interface TenantReportRow {
   last_transaction_date?: string | null;
 }
 
+interface MarketingLeadRow {
+  id: string | number;
+  name: string;
+  email: string;
+  whatsapp: string;
+  source: string;
+  status: LeadStatus;
+  notes?: string;
+  download_count: number;
+  created_at: string;
+  updated_at?: string;
+  matched_user_id?: string | number | null;
+  matched_family_id?: string | number | null;
+  matched_family_name?: string | null;
+  matched_plan_type?: PlanType | null;
+}
+
 const ADMIN_EMAIL = 'jeffersonluismattosocordeiro@gmail.com';
 const MONTHLY_PRICE = 29.9;
 const ANNUAL_MONTHLY_EQUIVALENT = 24.9;
-const ANNUAL_TOTAL_PRICE = 298.8;
 
 const PLAN_LABELS: Record<PlanType, string> = {
   TRIAL: 'Teste Grátis (10d)',
@@ -70,11 +90,20 @@ const PLAN_BADGE_CLASSES: Record<PlanType, string> = {
   COURTESY: 'bg-purple-500/15 text-purple-300 border border-purple-500/30',
 };
 
+const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  NEW: 'Novo Lead',
+  CONTACTED: 'Contatado',
+  CONVERTED: 'Convertido',
+  ARCHIVED: 'Arquivado',
+};
+
 const formatCurrencyBRL = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export default function InternalTenantReportPage() {
+  const [activeMainSection, setActiveMainSection] = useState<'TENANTS' | 'LEADS'>('TENANTS');
   const [tenants, setTenants] = useState<TenantReportRow[]>([]);
+  const [leads, setLeads] = useState<MarketingLeadRow[]>([]);
   const [contactPhone, setContactPhone] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastType, setBroadcastType] = useState<BroadcastType>('INFO');
@@ -82,14 +111,19 @@ export default function InternalTenantReportPage() {
   const [savingPhone, setSavingPhone] = useState(false);
   const [savingBroadcast, setSavingBroadcast] = useState(false);
   const [updatingTenant, setUpdatingTenant] = useState<string | null>(null);
+  const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [actionError, setActionError] = useState('');
   const [forbidden, setForbidden] = useState(false);
 
-  // Filtros e Busca
+  // Filtros e Busca de Clientes
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterTab>('ALL');
+
+  // Filtros e Busca de Leads do E-book
+  const [leadSearchTerm, setLeadSearchTerm] = useState('');
+  const [leadFilter, setLeadFilter] = useState<LeadFilterTab>('ALL');
 
   // Modal CRM / Edição Comercial & Suporte
   const [selectedTenant, setSelectedTenant] = useState<TenantReportRow | null>(null);
@@ -104,8 +138,9 @@ export default function InternalTenantReportPage() {
   const [tempPassword, setTempPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
 
-  // Modal / Menu de WhatsApp Rápido
+  // Modal / Menu de WhatsApp Rápido (Tenants e Leads)
   const [whatsAppTenant, setWhatsAppTenant] = useState<TenantReportRow | null>(null);
+  const [whatsAppLead, setWhatsAppLead] = useState<MarketingLeadRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +155,7 @@ export default function InternalTenantReportPage() {
         }
         if (!cancelled) {
           setTenants(Array.isArray(result.tenants) ? result.tenants : []);
+          setLeads(Array.isArray(result.leads) ? result.leads : []);
           setContactPhone(result.contactPhone || '');
           setBroadcastMessage(result.broadcastMessage || '');
           setBroadcastType((result.broadcastType as BroadcastType) || 'INFO');
@@ -204,7 +240,6 @@ export default function InternalTenantReportPage() {
       };
     }
 
-    // Plano TRIAL (10 dias)
     const registeredMs = tenant.registered_at ? new Date(tenant.registered_at).getTime() : NaN;
     const trialEndsMs = tenant.trial_ends_at
       ? new Date(tenant.trial_ends_at).getTime()
@@ -284,6 +319,9 @@ export default function InternalTenantReportPage() {
 
     const totalTransactions = tenants.reduce((acc, t) => acc + Number(t.transactions_count || 0), 0);
 
+    const newEbookLeadsCount = leads.filter(l => l.status === 'NEW').length;
+    const registeredEbookLeadsCount = leads.filter(l => Boolean(l.matched_family_id) || l.status === 'CONVERTED').length;
+
     return {
       totalCustomers: customerTenants.length,
       monthlySubscribers,
@@ -298,8 +336,11 @@ export default function InternalTenantReportPage() {
       courtesyCount,
       conversionRate,
       totalTransactions,
+      totalEbookLeads: leads.length,
+      newEbookLeadsCount,
+      registeredEbookLeadsCount,
     };
-  }, [tenants]);
+  }, [tenants, leads]);
 
   const filteredTenants = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -336,6 +377,23 @@ export default function InternalTenantReportPage() {
       return haystack.includes(query);
     });
   }, [tenants, searchTerm, activeFilter]);
+
+  const filteredLeads = useMemo(() => {
+    const query = leadSearchTerm.trim().toLowerCase();
+    return leads.filter(lead => {
+      if (leadFilter === 'NEW' && lead.status !== 'NEW') return false;
+      if (leadFilter === 'CONTACTED' && lead.status !== 'CONTACTED') return false;
+      if (leadFilter === 'REGISTERED' && !lead.matched_family_id && lead.status !== 'CONVERTED') return false;
+      if (leadFilter === 'ARCHIVED' && lead.status !== 'ARCHIVED') return false;
+
+      if (!query) return true;
+      const haystack = [lead.name, lead.email, lead.whatsapp, lead.notes, lead.matched_family_name]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [leads, leadSearchTerm, leadFilter]);
 
   const saveContactPhone = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -460,6 +518,60 @@ export default function InternalTenantReportPage() {
       setActionError(err instanceof Error ? err.message : 'Erro ao atualizar dados comerciais.');
     } finally {
       setUpdatingTenant(null);
+    }
+  };
+
+  const handleUpdateLead = async (
+    lead: MarketingLeadRow,
+    payload: { status?: LeadStatus; notes?: string },
+    successText?: string
+  ) => {
+    const leadId = String(lead.id);
+    setUpdatingLeadId(leadId);
+    setActionMessage('');
+    setActionError('');
+    try {
+      const response = await authenticatedFetch(
+        `${API_URL}/api/internal/leads/${encodeURIComponent(leadId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Não foi possível atualizar o lead.');
+      setLeads(current =>
+        current.map(item =>
+          String(item.id) === leadId
+            ? { ...item, status: result.status, notes: result.notes, updated_at: result.updated_at }
+            : item
+        )
+      );
+      if (successText) setActionMessage(successText);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Erro ao atualizar lead.');
+    } finally {
+      setUpdatingLeadId(null);
+    }
+  };
+
+  const handleDeleteLead = async (lead: MarketingLeadRow) => {
+    if (!window.confirm(`Remover o lead "${lead.name}" (${lead.email})?`)) return;
+    const leadId = String(lead.id);
+    setUpdatingLeadId(leadId);
+    try {
+      const response = await authenticatedFetch(
+        `${API_URL}/api/internal/leads/${encodeURIComponent(leadId)}`,
+        { method: 'DELETE' }
+      );
+      if (!response.ok) throw new Error('Não foi possível excluir o lead.');
+      setLeads(current => current.filter(item => String(item.id) !== leadId));
+      setActionMessage(`Lead "${lead.name}" removido.`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Erro ao remover lead.');
+    } finally {
+      setUpdatingLeadId(null);
     }
   };
 
@@ -598,6 +710,47 @@ export default function InternalTenantReportPage() {
     URL.revokeObjectURL(url);
   };
 
+  const exportLeadsCsv = () => {
+    const headers = [
+      'ID',
+      'Nome',
+      'Email',
+      'WhatsApp',
+      'Origem',
+      'Status Comercial',
+      'Criou Conta no Sistema',
+      'Downloads',
+      'Data Captura',
+      'Notas',
+    ];
+    const rows = filteredLeads.map(l => [
+      String(l.id),
+      l.name,
+      l.email,
+      l.whatsapp,
+      l.source,
+      LEAD_STATUS_LABELS[l.status] || l.status,
+      l.matched_family_name ? `Sim (${l.matched_family_name})` : 'Ainda nao',
+      String(l.download_count),
+      formatRegistrationDate(l.created_at),
+      (l.notes || '').replace(/\r?\n/g, ' '),
+    ]);
+
+    const csvContent =
+      '\uFEFF' +
+      [headers, ...rows]
+        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+        .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `finanfamily-leads-ebook-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const buildWhatsAppUrl = (phone: string | null | undefined, message: string) => {
     const digits = (phone || '').replace(/\D/g, '');
     const normalizedPhone = digits.length >= 10 && !digits.startsWith('55') ? `55${digits}` : digits;
@@ -618,15 +771,16 @@ export default function InternalTenantReportPage() {
             <ArrowLeft className="h-4 w-4" /> Voltar ao dashboard
           </Link>
 
-          <button
-            type="button"
-            onClick={exportTenantsCsv}
-            disabled={tenants.length === 0}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-200 transition-colors hover:border-emerald-500/40 hover:text-white disabled:opacity-50 cursor-pointer"
-          >
-            <Download className="h-4 w-4 text-emerald-400" />
-            Exportar Base CSV (Excel)
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={activeMainSection === 'TENANTS' ? exportTenantsCsv : exportLeadsCsv}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-200 transition-colors hover:border-emerald-500/40 hover:text-white cursor-pointer"
+            >
+              <Download className="h-4 w-4 text-emerald-400" />
+              {activeMainSection === 'TENANTS' ? 'Exportar Clientes (CSV)' : 'Exportar Leads do E-book (CSV)'}
+            </button>
+          </div>
         </div>
 
         <header className="mb-8">
@@ -644,8 +798,8 @@ export default function InternalTenantReportPage() {
             </div>
           </div>
           <p className="mt-2.5 text-sm text-slate-400 max-w-3xl">
-            Gerencie seus clientes em período de teste (10 dias), acompanhe o engajamento real de cada família,
-            controle assinaturas Mensais (R$ 29,90) e Anuais (R$ 298,80) e acione clientes via WhatsApp com 1 clique.
+            Gerencie seus clientes em período de teste (10 dias), acompanhe os leads captados pelo E-book na Landing Page,
+            controle assinaturas Mensais (R$ 29,90) e Anuais (R$ 298,80) e acione contatos no WhatsApp com 1 clique.
           </p>
         </header>
 
@@ -667,51 +821,70 @@ export default function InternalTenantReportPage() {
         ) : (
           <div className="space-y-6">
             {/* ================= CARDS EXECUTIVOS (KPIs DO SAAS) ================= */}
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="rounded-2xl border border-emerald-500/25 bg-slate-900 p-5 shadow-lg">
                 <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-400">
                   <span>MRR (Receita Mensal)</span>
                   <TrendingUp className="h-4 w-4" />
                 </div>
-                <p className="mt-2 text-2xl sm:text-3xl font-black text-white">
+                <p className="mt-2 text-2xl font-black text-white">
                   {formatCurrencyBRL(kpis.mrr)}
                 </p>
                 <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
-                  <span>ARR Projetado: <strong className="text-slate-200">{formatCurrencyBRL(kpis.arr)}</strong></span>
+                  <span>ARR: <strong className="text-slate-200">{formatCurrencyBRL(kpis.arr)}</strong></span>
                   <span className="text-emerald-400 font-bold">{kpis.paidSubscribers} pagantes</span>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
                 <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-sky-400">
-                  <span>Funil de Teste (10 Dias)</span>
+                  <span>Funil Teste (10 Dias)</span>
                   <Sparkles className="h-4 w-4" />
                 </div>
-                <div className="mt-2 flex items-baseline gap-3">
-                  <p className="text-2xl sm:text-3xl font-black text-white">{kpis.activeTrialCount}</p>
-                  <span className="text-xs font-semibold text-slate-400">em teste ativo</span>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <p className="text-2xl font-black text-white">{kpis.activeTrialCount}</p>
+                  <span className="text-xs font-semibold text-slate-400">em teste</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs">
                   <span className="text-rose-400 font-bold">
-                    {kpis.expiredTrialCount} c/ teste vencido
+                    {kpis.expiredTrialCount} vencidos
                   </span>
                   <span className="text-slate-400">
-                    Conversão: <strong className="text-white">{kpis.conversionRate}%</strong>
+                    Conv.: <strong className="text-white">{kpis.conversionRate}%</strong>
                   </span>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
                 <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-400">
-                  <span>Leads Quentes no Teste</span>
+                  <span>Leads Quentes Trial</span>
                   <Flame className="h-4 w-4" />
                 </div>
-                <div className="mt-2 flex items-baseline gap-3">
-                  <p className="text-2xl sm:text-3xl font-black text-amber-300">{kpis.hotLeadsCount}</p>
-                  <span className="text-xs font-semibold text-slate-400">usando ativamente</span>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <p className="text-2xl font-black text-amber-300">{kpis.hotLeadsCount}</p>
+                  <span className="text-xs font-semibold text-slate-400">usando o app</span>
                 </div>
                 <p className="mt-2 text-xs text-slate-400">
-                  Famílias em teste que já criaram lançamentos, cartões ou convidaram membros.
+                  Já cadastraram contas, cartões ou membros.
+                </p>
+              </div>
+
+              <div
+                onClick={() => setActiveMainSection('LEADS')}
+                className="rounded-2xl border border-teal-500/25 bg-slate-900 p-5 shadow-lg cursor-pointer hover:border-teal-400/50 transition-all"
+              >
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-teal-300">
+                  <span>Leads do E-book</span>
+                  <BookOpen className="h-4 w-4" />
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <p className="text-2xl font-black text-white">{kpis.totalEbookLeads}</p>
+                  <span className="text-xs font-semibold text-teal-400">
+                    ({kpis.newEbookLeadsCount} novos)
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  Criaram conta: <strong className="text-emerald-400">{kpis.registeredEbookLeadsCount}</strong>
                 </p>
               </div>
 
@@ -720,13 +893,13 @@ export default function InternalTenantReportPage() {
                   <span>Base Total & Uso</span>
                   <Users className="h-4 w-4 text-emerald-400" />
                 </div>
-                <div className="mt-2 flex items-baseline gap-3">
-                  <p className="text-2xl sm:text-3xl font-black text-white">{kpis.totalCustomers}</p>
-                  <span className="text-xs font-semibold text-slate-400">famílias clientes</span>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <p className="text-2xl font-black text-white">{kpis.totalCustomers}</p>
+                  <span className="text-xs font-semibold text-slate-400">famílias</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
-                  <span>{kpis.totalTransactions} lançamentos</span>
-                  <span className="text-rose-400 font-semibold">{kpis.blockedCount} bloqueados</span>
+                  <span>{kpis.totalTransactions} lanç.</span>
+                  <span className="text-rose-400 font-semibold">{kpis.blockedCount} bloq.</span>
                 </div>
               </div>
             </section>
@@ -835,294 +1008,541 @@ export default function InternalTenantReportPage() {
               </div>
             )}
 
-            {/* ================= TABELA CRM DE TENANTS ================= */}
-            <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
-              {/* Barra de Busca e Filtros */}
-              <div className="border-b border-slate-800 p-4 sm:p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                      placeholder="Buscar por família, nome, e-mail, telefone ou nota..."
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 pl-10 pr-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
-                    />
+            {/* ================= SELETOR DE VISÃO: CLIENTES VS LEADS DO E-BOOK ================= */}
+            <div className="flex flex-wrap items-center gap-2 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
+              <button
+                type="button"
+                onClick={() => setActiveMainSection('TENANTS')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+                  activeMainSection === 'TENANTS'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <Users className="h-4 w-4" />
+                <span>Famílias Cadastradas ({tenants.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveMainSection('LEADS')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+                  activeMainSection === 'LEADS'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Leads do E-book ({leads.length})</span>
+                {kpis.newEbookLeadsCount > 0 && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      activeMainSection === 'LEADS'
+                        ? 'bg-slate-950 text-emerald-400'
+                        : 'bg-emerald-500 text-slate-950'
+                    }`}
+                  >
+                    {kpis.newEbookLeadsCount} novo(s)
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {activeMainSection === 'TENANTS' ? (
+              /* ================= TABELA CRM DE TENANTS ================= */
+              <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+                <div className="border-b border-slate-800 p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        placeholder="Buscar por família, nome, e-mail, telefone ou nota..."
+                        className="w-full rounded-xl border border-slate-700 bg-slate-950 pl-10 pr-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-400">
+                      Exibindo <strong className="text-white">{filteredTenants.length}</strong> de{' '}
+                      <strong className="text-white">{tenants.length}</strong> cadastros
+                    </p>
                   </div>
-                  <p className="text-xs font-semibold text-slate-400">
-                    Exibindo <strong className="text-white">{filteredTenants.length}</strong> de{' '}
-                    <strong className="text-white">{tenants.length}</strong> cadastros
-                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(
+                      [
+                        { id: 'ALL', label: `Todos (${tenants.length})` },
+                        { id: 'HOT_TRIAL', label: `🔥 Leads Quentes (${kpis.hotLeadsCount})` },
+                        { id: 'EXPIRED_TRIAL', label: `⏰ Teste Vencido (${kpis.expiredTrialCount})` },
+                        { id: 'ACTIVE_TRIAL', label: `🧪 Em Teste ≤10d (${kpis.activeTrialCount})` },
+                        { id: 'PAID', label: `💎 Assinantes (${kpis.paidSubscribers})` },
+                        { id: 'COURTESY', label: `🎁 Cortesia (${kpis.courtesyCount})` },
+                        { id: 'BLOCKED', label: `🚫 Bloqueados (${kpis.blockedCount})` },
+                      ] as { id: FilterTab; label: string }[]
+                    ).map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveFilter(tab.id)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                          activeFilter === tab.id
+                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                            : 'bg-slate-950 text-slate-300 border border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {(
-                    [
-                      { id: 'ALL', label: `Todos (${tenants.length})` },
-                      { id: 'HOT_TRIAL', label: `🔥 Leads Quentes (${kpis.hotLeadsCount})` },
-                      { id: 'EXPIRED_TRIAL', label: `⏰ Teste Vencido (${kpis.expiredTrialCount})` },
-                      { id: 'ACTIVE_TRIAL', label: `🧪 Em Teste ≤10d (${kpis.activeTrialCount})` },
-                      { id: 'PAID', label: `💎 Assinantes (${kpis.paidSubscribers})` },
-                      { id: 'COURTESY', label: `🎁 Cortesia (${kpis.courtesyCount})` },
-                      { id: 'BLOCKED', label: `🚫 Bloqueados (${kpis.blockedCount})` },
-                    ] as { id: FilterTab; label: string }[]
-                  ).map(tab => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveFilter(tab.id)}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                        activeFilter === tab.id
-                          ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                          : 'bg-slate-950 text-slate-300 border border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1150px] text-left text-sm">
+                    <thead className="bg-slate-950/70 text-xs uppercase tracking-wide text-slate-400">
+                      <tr>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Família & Contato</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Engajamento & Uso</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Plano Atual</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Prazo (Teste / Assinatura)</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Status</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Ações Rápidas & CRM</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {filteredTenants.map(tenant => {
+                        const familyId = String(tenant.id);
+                        const isBlocked = Boolean(tenant.blocked_at);
+                        const isAdminTenant = tenant.owner_email?.toLowerCase() === ADMIN_EMAIL;
+                        const isUpdating = updatingTenant === familyId;
+                        const plan: PlanType = tenant.plan_type || 'TRIAL';
+                        const trialInfo = getTrialInfo(tenant);
+                        const hotLead = isHotLead(tenant);
+                        const txCount = Number(tenant.transactions_count || 0);
+                        const cardsCount = Number(tenant.cards_count || 0);
+                        const membersCount = Number(tenant.members_count || 1);
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1150px] text-left text-sm">
-                  <thead className="bg-slate-950/70 text-xs uppercase tracking-wide text-slate-400">
-                    <tr>
-                      <th scope="col" className="px-4 py-3.5 font-bold">Família & Contato</th>
-                      <th scope="col" className="px-4 py-3.5 font-bold">Engajamento & Uso</th>
-                      <th scope="col" className="px-4 py-3.5 font-bold">Plano Atual</th>
-                      <th scope="col" className="px-4 py-3.5 font-bold">Prazo (Teste / Assinatura)</th>
-                      <th scope="col" className="px-4 py-3.5 font-bold">Status</th>
-                      <th scope="col" className="px-4 py-3.5 font-bold">Ações Rápidas & CRM</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {filteredTenants.map(tenant => {
-                      const familyId = String(tenant.id);
-                      const isBlocked = Boolean(tenant.blocked_at);
-                      const isAdminTenant = tenant.owner_email?.toLowerCase() === ADMIN_EMAIL;
-                      const isUpdating = updatingTenant === familyId;
-                      const plan: PlanType = tenant.plan_type || 'TRIAL';
-                      const trialInfo = getTrialInfo(tenant);
-                      const hotLead = isHotLead(tenant);
-                      const txCount = Number(tenant.transactions_count || 0);
-                      const cardsCount = Number(tenant.cards_count || 0);
-                      const membersCount = Number(tenant.members_count || 1);
-
-                      return (
-                        <tr key={tenant.id} className="text-slate-200 hover:bg-slate-950/40 transition-colors">
-                          {/* Coluna 1: Família & Contato */}
-                          <td className="px-4 py-4 align-top">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-white">{tenant.name}</span>
-                              {hotLead && (
-                                <span
-                                  title="Família em período de teste usando ativamente o sistema"
-                                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-extrabold text-amber-300"
-                                >
-                                  <Flame className="h-3 w-3" /> Lead Quente
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-300 mt-0.5">
-                              {tenant.owner_name || 'Não identificado'} •{' '}
-                              <span className="text-slate-400">{tenant.owner_email || '—'}</span>
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
-                              <span>Cad.: {formatRegistrationDate(tenant.registered_at)}</span>
-                              {tenant.owner_phone && (
-                                <span className="text-emerald-400 font-semibold">📱 {tenant.owner_phone}</span>
-                              )}
-                            </div>
-                            {tenant.admin_notes && (
-                              <p className="mt-1.5 rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-[11px] text-amber-200/90 max-w-xs truncate">
-                                📝 {tenant.admin_notes}
-                              </p>
-                            )}
-                          </td>
-
-                          {/* Coluna 2: Engajamento */}
-                          <td className="px-4 py-4 align-top">
-                            <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
-                              <span className="rounded-lg bg-slate-950 border border-slate-800 px-2 py-0.5 text-slate-300">
-                                👥 {membersCount} {membersCount === 1 ? 'membro' : 'membros'}
-                              </span>
-                              <span
-                                className={`rounded-lg border px-2 py-0.5 ${
-                                  txCount > 0
-                                    ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
-                                    : 'bg-slate-950 border-slate-800 text-slate-400'
-                                }`}
-                              >
-                                📊 {txCount} lanç.
-                              </span>
-                              <span className="rounded-lg bg-slate-950 border border-slate-800 px-2 py-0.5 text-slate-300">
-                                💳 {cardsCount} cartões
-                              </span>
-                            </div>
-                            <p className="mt-1.5 text-[11px] text-slate-400">
-                              {tenant.last_transaction_date
-                                ? `Último lanç.: ${formatShortDate(tenant.last_transaction_date)}`
-                                : 'Nenhum lançamento ainda'}
-                            </p>
-                          </td>
-
-                          {/* Coluna 3: Plano Atual */}
-                          <td className="px-4 py-4 align-top whitespace-nowrap">
-                            {isAdminTenant ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-xs font-bold text-emerald-300">
-                                <Crown className="h-3.5 w-3.5" /> Admin Vitalício
-                              </span>
-                            ) : (
-                              <div className="space-y-1.5">
-                                <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${PLAN_BADGE_CLASSES[plan]}`}>
-                                  {PLAN_LABELS[plan]}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    disabled={isUpdating}
-                                    onClick={() =>
-                                      handleQuickCommercialAction(
-                                        tenant,
-                                        { activate_cycle: 'MONTHLY' },
-                                        `Plano Mensal (R$ 29,90) ativado para ${tenant.name}.`
-                                      )
-                                    }
-                                    title="Ativar Plano Mensal (+30 dias)"
-                                    className="rounded bg-slate-800 hover:bg-emerald-500/20 hover:text-emerald-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
+                        return (
+                          <tr key={tenant.id} className="text-slate-200 hover:bg-slate-950/40 transition-colors">
+                            <td className="px-4 py-4 align-top">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-white">{tenant.name}</span>
+                                {hotLead && (
+                                  <span
+                                    title="Família em período de teste usando ativamente o sistema"
+                                    className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-extrabold text-amber-300"
                                   >
-                                    +Mensal
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={isUpdating}
-                                    onClick={() =>
-                                      handleQuickCommercialAction(
-                                        tenant,
-                                        { activate_cycle: 'ANNUAL' },
-                                        `Plano Anual (R$ 298,80) ativado para ${tenant.name}.`
-                                      )
-                                    }
-                                    title="Ativar Plano Anual (+1 ano)"
-                                    className="rounded bg-slate-800 hover:bg-amber-500/20 hover:text-amber-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
-                                  >
-                                    +Anual
-                                  </button>
-                                </div>
+                                    <Flame className="h-3 w-3" /> Lead Quente
+                                  </span>
+                                )}
                               </div>
-                            )}
-                          </td>
+                              <p className="text-xs text-slate-300 mt-0.5">
+                                {tenant.owner_name || 'Não identificado'} •{' '}
+                                <span className="text-slate-400">{tenant.owner_email || '—'}</span>
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+                                <span>Cad.: {formatRegistrationDate(tenant.registered_at)}</span>
+                                {tenant.owner_phone && (
+                                  <span className="text-emerald-400 font-semibold">📱 {tenant.owner_phone}</span>
+                                )}
+                              </div>
+                              {tenant.admin_notes && (
+                                <p className="mt-1.5 rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-[11px] text-amber-200/90 max-w-xs truncate">
+                                  📝 {tenant.admin_notes}
+                                </p>
+                              )}
+                            </td>
 
-                          {/* Coluna 4: Prazo (Teste 10d / Assinatura) */}
-                          <td className="px-4 py-4 align-top whitespace-nowrap">
-                            {isAdminTenant ? (
-                              <span className="text-xs text-slate-400">Sem vencimento</span>
-                            ) : (
-                              <div className="space-y-1.5">
-                                <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${trialInfo.badgeClass}`}>
-                                  {trialInfo.label}
+                            <td className="px-4 py-4 align-top">
+                              <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                                <span className="rounded-lg bg-slate-950 border border-slate-800 px-2 py-0.5 text-slate-300">
+                                  👥 {membersCount} {membersCount === 1 ? 'membro' : 'membros'}
                                 </span>
-                                {plan === 'TRIAL' && (
-                                  <div>
+                                <span
+                                  className={`rounded-lg border px-2 py-0.5 ${
+                                    txCount > 0
+                                      ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                                      : 'bg-slate-950 border-slate-800 text-slate-400'
+                                  }`}
+                                >
+                                  📊 {txCount} lanç.
+                                </span>
+                                <span className="rounded-lg bg-slate-950 border border-slate-800 px-2 py-0.5 text-slate-300">
+                                  💳 {cardsCount} cartões
+                                </span>
+                              </div>
+                              <p className="mt-1.5 text-[11px] text-slate-400">
+                                {tenant.last_transaction_date
+                                  ? `Último lanç.: ${formatShortDate(tenant.last_transaction_date)}`
+                                  : 'Nenhum lançamento ainda'}
+                              </p>
+                            </td>
+
+                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                              {isAdminTenant ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                                  <Crown className="h-3.5 w-3.5" /> Admin Vitalício
+                                </span>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${PLAN_BADGE_CLASSES[plan]}`}>
+                                    {PLAN_LABELS[plan]}
+                                  </span>
+                                  <div className="flex items-center gap-1">
                                     <button
                                       type="button"
                                       disabled={isUpdating}
                                       onClick={() =>
                                         handleQuickCommercialAction(
                                           tenant,
-                                          { extend_trial_days: 5 },
-                                          `+5 dias de teste liberados para ${tenant.name}.`
+                                          { activate_cycle: 'MONTHLY' },
+                                          `Plano Mensal (R$ 29,90) ativado para ${tenant.name}.`
                                         )
                                       }
-                                      className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-sky-500/20 hover:text-sky-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
+                                      title="Ativar Plano Mensal (+30 dias)"
+                                      className="rounded bg-slate-800 hover:bg-emerald-500/20 hover:text-emerald-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
                                     >
-                                      <CalendarPlus className="h-3 w-3" /> +5 dias de teste
+                                      +Mensal
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isUpdating}
+                                      onClick={() =>
+                                        handleQuickCommercialAction(
+                                          tenant,
+                                          { activate_cycle: 'ANNUAL' },
+                                          `Plano Anual (R$ 298,80) ativado para ${tenant.name}.`
+                                        )
+                                      }
+                                      title="Ativar Plano Anual (+1 ano)"
+                                      className="rounded bg-slate-800 hover:bg-amber-500/20 hover:text-amber-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
+                                    >
+                                      +Anual
                                     </button>
                                   </div>
-                                )}
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Coluna 5: Status */}
-                          <td className="px-4 py-4 align-top whitespace-nowrap">
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                                isBlocked ? 'bg-rose-500/10 text-rose-300' : 'bg-emerald-500/10 text-emerald-300'
-                              }`}
-                            >
-                              {isBlocked ? 'Bloqueado' : 'Ativo'}
-                            </span>
-                          </td>
-
-                          {/* Coluna 6: Ações Rápidas & CRM */}
-                          <td className="px-4 py-4 align-top whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              {!isAdminTenant && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => setWhatsAppTenant(tenant)}
-                                    title="Abordar cliente no WhatsApp com mensagem pronta"
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 transition-colors cursor-pointer"
-                                  >
-                                    <MessageCircle className="h-3.5 w-3.5" />
-                                    WhatsApp
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => openCrmModal(tenant)}
-                                    title="Gerenciar Plano, Notas CRM e Senha"
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs font-bold text-slate-200 hover:bg-slate-700 transition-colors cursor-pointer"
-                                  >
-                                    <Edit3 className="h-3.5 w-3.5" />
-                                    CRM / Suporte
-                                  </button>
-                                </>
+                                </div>
                               )}
+                            </td>
 
-                              <button
-                                type="button"
-                                disabled={isUpdating || isAdminTenant}
-                                onClick={() => setTenantBlocked(tenant)}
-                                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-60 cursor-pointer ${
-                                  isBlocked
-                                    ? 'border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10'
-                                    : 'border-rose-500/30 text-rose-300 hover:bg-rose-500/10'
+                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                              {isAdminTenant ? (
+                                <span className="text-xs text-slate-400">Sem vencimento</span>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${trialInfo.badgeClass}`}>
+                                    {trialInfo.label}
+                                  </span>
+                                  {plan === 'TRIAL' && (
+                                    <div>
+                                      <button
+                                        type="button"
+                                        disabled={isUpdating}
+                                        onClick={() =>
+                                          handleQuickCommercialAction(
+                                            tenant,
+                                            { extend_trial_days: 5 },
+                                            `+5 dias de teste liberados para ${tenant.name}.`
+                                          )
+                                        }
+                                        className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-sky-500/20 hover:text-sky-300 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition-colors cursor-pointer"
+                                      >
+                                        <CalendarPlus className="h-3 w-3" /> +5 dias de teste
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                                  isBlocked ? 'bg-rose-500/10 text-rose-300' : 'bg-emerald-500/10 text-emerald-300'
                                 }`}
                               >
-                                {isUpdating ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : isBlocked ? (
-                                  <Unlock className="h-3.5 w-3.5" />
-                                ) : (
-                                  <Ban className="h-3.5 w-3.5" />
+                                {isBlocked ? 'Bloqueado' : 'Ativo'}
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                {!isAdminTenant && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => setWhatsAppTenant(tenant)}
+                                      title="Abordar cliente no WhatsApp com mensagem pronta"
+                                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                                    >
+                                      <MessageCircle className="h-3.5 w-3.5" />
+                                      WhatsApp
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => openCrmModal(tenant)}
+                                      title="Gerenciar Plano, Notas CRM e Senha"
+                                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs font-bold text-slate-200 hover:bg-slate-700 transition-colors cursor-pointer"
+                                    >
+                                      <Edit3 className="h-3.5 w-3.5" />
+                                      CRM / Suporte
+                                    </button>
+                                  </>
                                 )}
-                                {isAdminTenant ? 'Conta administrativa' : isBlocked ? 'Desbloquear' : 'Bloquear'}
-                              </button>
-                            </div>
+
+                                <button
+                                  type="button"
+                                  disabled={isUpdating || isAdminTenant}
+                                  onClick={() => setTenantBlocked(tenant)}
+                                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-60 cursor-pointer ${
+                                    isBlocked
+                                      ? 'border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10'
+                                      : 'border-rose-500/30 text-rose-300 hover:bg-rose-500/10'
+                                  }`}
+                                >
+                                  {isUpdating ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : isBlocked ? (
+                                    <Unlock className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Ban className="h-3.5 w-3.5" />
+                                  )}
+                                  {isAdminTenant ? 'Conta administrativa' : isBlocked ? 'Desbloquear' : 'Bloquear'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredTenants.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                            Nenhum tenant encontrado para o filtro selecionado.
                           </td>
                         </tr>
-                      );
-                    })}
-                    {filteredTenants.length === 0 && (
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ) : (
+              /* ================= TABELA DE LEADS DO E-BOOK ================= */
+              <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+                <div className="border-b border-slate-800 p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={leadSearchTerm}
+                        onChange={e => setLeadSearchTerm(e.target.value)}
+                        placeholder="Buscar lead por nome, e-mail ou WhatsApp..."
+                        className="w-full rounded-xl border border-slate-700 bg-slate-950 pl-10 pr-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-400">
+                      Exibindo <strong className="text-white">{filteredLeads.length}</strong> de{' '}
+                      <strong className="text-white">{leads.length}</strong> leads captados
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(
+                      [
+                        { id: 'ALL', label: `Todos (${leads.length})` },
+                        { id: 'NEW', label: `🆕 Novos (${leads.filter(l => l.status === 'NEW').length})` },
+                        { id: 'CONTACTED', label: `💬 Contatados (${leads.filter(l => l.status === 'CONTACTED').length})` },
+                        { id: 'REGISTERED', label: `✅ Criaram Conta (${kpis.registeredEbookLeadsCount})` },
+                        { id: 'ARCHIVED', label: `📦 Arquivados (${leads.filter(l => l.status === 'ARCHIVED').length})` },
+                      ] as { id: LeadFilterTab; label: string }[]
+                    ).map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setLeadFilter(tab.id)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                          leadFilter === tab.id
+                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                            : 'bg-slate-950 text-slate-300 border border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1000px] text-left text-sm">
+                    <thead className="bg-slate-950/70 text-xs uppercase tracking-wide text-slate-400">
                       <tr>
-                        <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
-                          Nenhum tenant encontrado para o filtro selecionado.
-                        </td>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Lead & Contato</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Data & Downloads</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Cruzamento FinanFamily</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Status Comercial</th>
+                        <th scope="col" className="px-4 py-3.5 font-bold">Ações de Conversão</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {filteredLeads.map(lead => {
+                        const isUpdating = updatingLeadId === String(lead.id);
+                        return (
+                          <tr key={lead.id} className="text-slate-200 hover:bg-slate-950/40 transition-colors">
+                            <td className="px-4 py-4 align-top">
+                              <p className="font-bold text-white">{lead.name}</p>
+                              <p className="text-xs text-slate-400">{lead.email}</p>
+                              <p className="text-xs font-semibold text-emerald-400 mt-1">📱 {lead.whatsapp}</p>
+                            </td>
+
+                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                              <p className="text-xs text-slate-200">{formatRegistrationDate(lead.created_at)}</p>
+                              <span className="mt-1 inline-block rounded-lg bg-slate-950 border border-slate-800 px-2 py-0.5 text-[11px] text-slate-400">
+                                📥 {lead.download_count}x baixado
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-4 align-top">
+                              {lead.matched_family_id ? (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                                    <CheckCircle2 className="h-3.5 w-3.5" /> Já criou conta!
+                                  </span>
+                                  <p className="text-xs text-slate-300">
+                                    {lead.matched_family_name} ({PLAN_LABELS[lead.matched_plan_type || 'TRIAL']})
+                                  </p>
+                                </div>
+                              ) : (
+                                <span className="inline-block rounded-full bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 text-xs font-bold text-amber-300">
+                                  ⏳ Ainda não criou conta
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="px-4 py-4 align-top">
+                              <select
+                                value={lead.status}
+                                disabled={isUpdating}
+                                onChange={e =>
+                                  handleUpdateLead(
+                                    lead,
+                                    { status: e.target.value as LeadStatus },
+                                    `Status de ${lead.name} alterado para ${LEAD_STATUS_LABELS[e.target.value as LeadStatus]}.`
+                                  )
+                                }
+                                className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-bold text-white outline-none focus:border-emerald-500"
+                              >
+                                <option value="NEW">🆕 Novo Lead</option>
+                                <option value="CONTACTED">💬 Contatado no WhatsApp</option>
+                                <option value="CONVERTED">✅ Convertido em Cliente</option>
+                                <option value="ARCHIVED">📦 Arquivado</option>
+                              </select>
+                            </td>
+
+                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setWhatsAppLead(lead)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                                >
+                                  <MessageCircle className="h-3.5 w-3.5" />
+                                  Chamar no WhatsApp
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isUpdating}
+                                  onClick={() => handleDeleteLead(lead)}
+                                  title="Excluir lead"
+                                  className="rounded-lg border border-rose-500/25 p-2 text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredLeads.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-5 py-8 text-center text-slate-400">
+                            Nenhum lead do e-book encontrado para o filtro selecionado.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>
 
-      {/* ================= MODAL DE TEMPLATES DE WHATSAPP ================= */}
+      {/* ================= MODAL DE WHATSAPP PARA LEADS DO E-BOOK ================= */}
+      {whatsAppLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-emerald-400">Converter Lead do E-book (10 Passos)</p>
+                <h3 className="text-lg font-extrabold text-white">{whatsAppLead.name}</h3>
+                <p className="text-xs text-slate-400">
+                  {whatsAppLead.email} • 📱 {whatsAppLead.whatsapp}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWhatsAppLead(null)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              {[
+                {
+                  title: '1. Abordagem Consultiva Pós-Download do E-book',
+                  text: `Olá ${whatsAppLead.name}! Tudo bem? Aqui é o Jefferson, fundador do FinanFamily. Vi que você acabou de baixar nosso E-book "10 Passos para Organizar a Vida Financeira da Família". Conseguiu abrir o material certinho?\n\nSe quiser colocar os 10 passos em prática sem precisar montar planilhas, você tem 10 dias de teste grátis liberados no FinanFamily!`,
+                },
+                {
+                  title: '2. Convite Direto para Ativar os 10 Dias Grátis',
+                  text: `Olá ${whatsAppLead.name}! Tudo bem? Passando para saber o que achou do guia dos 10 Passos Financeiros. Quer que eu te ajude a ativar seus 10 dias grátis no FinanFamily para testar o quadro Kanban de contas, controle de cartões e a projeção de 12 meses com sua família?`,
+                },
+                {
+                  title: '3. Oferta Especial Plano Anual (12x R$ 24,90)',
+                  text: `Olá ${whatsAppLead.name}! Como você baixou nosso guia oficial do FinanFamily, quero te convidar para testar a plataforma completa por 10 dias grátis. Após o teste, temos o Plano Mensal por R$ 29,90/mês ou o Plano Anual por R$ 298,80 (que fica apenas 12x de R$ 24,90 no cartão). Vamos começar seu teste gratuito hoje?`,
+                },
+              ].map(template => (
+                <div
+                  key={template.title}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-3.5 flex flex-col gap-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white">{template.title}</span>
+                    <a
+                      href={buildWhatsAppUrl(whatsAppLead.whatsapp, template.text)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        if (whatsAppLead.status === 'NEW') {
+                          handleUpdateLead(whatsAppLead, { status: 'CONTACTED' });
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-extrabold text-slate-950 hover:bg-emerald-400"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" /> Enviar e Marcar Contatado
+                    </a>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed whitespace-pre-line">{template.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL DE TEMPLATES DE WHATSAPP (CLIENTES) ================= */}
       {whatsAppTenant && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-4">
