@@ -8,6 +8,9 @@ import {
   Edit,
   Trash2,
   AlertTriangle,
+  Sparkles,
+  ShieldCheck,
+  MessageCircle,
 } from 'lucide-react';
 import { SettlementEntry, formatCurrency } from './dashboardUtils';
 
@@ -933,6 +936,189 @@ export function CreateCardModal({
             )}
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+interface SubscriptionUpgradeModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  userName: string;
+  userEmail: string;
+  familyId: string;
+  contactPhone?: string;
+  daysRemaining?: number | null;
+}
+
+export function SubscriptionUpgradeModal({
+  isOpen,
+  onClose,
+  userName,
+  userEmail,
+  familyId,
+  contactPhone,
+  daysRemaining,
+}: SubscriptionUpgradeModalProps) {
+  if (!isOpen) return null;
+
+  const openPlanCheckoutWhatsApp = (planChoice: 'MONTHLY' | 'ANNUAL') => {
+    const planLabel =
+      planChoice === 'ANNUAL'
+        ? 'Plano Anual (12x de R$ 24,90 ou R$ 298,80/ano)'
+        : 'Plano Mensal (R$ 29,90/mês)';
+    const message = `Olá! Sou ${userName} (${userEmail} — Família #${familyId}) no FinanFamily e quero ativar minha assinatura no *${planLabel}*. Pode me enviar o link de pagamento?`;
+
+    const rawDigits = (contactPhone || '').replace(/\D/g, '');
+    const isValidPhone = rawDigits.length >= 10 && !rawDigits.endsWith('00000000');
+    const normalizedPhone = isValidPhone
+      ? rawDigits.startsWith('55') && rawDigits.length >= 12
+        ? rawDigits
+        : `55${rawDigits}`
+      : '';
+
+    const whatsappUrl = normalizedPhone
+      ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 sm:p-8 shadow-2xl relative my-auto">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-6 right-6 text-slate-400 hover:text-white cursor-pointer"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="text-center max-w-xl mx-auto mb-7">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-bold mb-3">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>
+              {typeof daysRemaining === 'number'
+                ? daysRemaining > 0
+                  ? `Período de teste: restam ${daysRemaining} dia(s)`
+                  : 'Período de teste encerrado'
+                : 'Assinatura FinanFamily'}
+            </span>
+          </div>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
+            Escolha o plano ideal para sua família
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1.5">
+            Mantenha todos os seus lançamentos, cartões, projeção de 12 meses e acesso compartilhado ativos sem interrupções.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* PLANO MENSAL */}
+          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300">
+                  Plano Mensal
+                </span>
+                <span className="text-xs font-semibold text-slate-400">Sem fidelidade</span>
+              </div>
+              <h4 className="text-lg font-extrabold text-white">Mensal Família</h4>
+              <div className="my-4 pb-4 border-b border-slate-800">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xs font-bold text-slate-400">R$</span>
+                  <span className="text-3xl font-black text-white">29,90</span>
+                  <span className="text-xs font-semibold text-slate-400">/mês</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">Renovação mensal via PIX ou Cartão</p>
+              </div>
+              <ul className="space-y-2 text-xs text-slate-300 mb-6">
+                {[
+                  'Acesso completo ao Painel Web da família',
+                  'Convite de membros com permissões',
+                  'Projeção de saldo de 12 meses + Kanban',
+                  'Gestão de Cartões, Faturas e Provisões Anuais',
+                  'Exportação em PDF e Excel (.xlsx)',
+                ].map(item => (
+                  <li key={item} className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openPlanCheckoutWhatsApp('MONTHLY')}
+              className="w-full py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-700 transition-all cursor-pointer"
+            >
+              <MessageCircle className="w-4 h-4 text-emerald-400" />
+              Ativar Plano Mensal (R$ 29,90)
+            </button>
+          </div>
+
+          {/* PLANO ANUAL */}
+          <div className="bg-slate-950 border-2 border-emerald-500 rounded-2xl p-6 flex flex-col justify-between relative shadow-[0_12px_40px_rgba(16,185,129,0.15)]">
+            <div className="absolute -top-3 right-4 bg-emerald-500 text-slate-950 text-[10px] font-extrabold px-3 py-0.5 rounded-full uppercase tracking-wider">
+              Mais Vantajoso • Economize R$ 60
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  Plano Anual (Até 12x)
+                </span>
+                <span className="text-xs font-bold text-emerald-400">17% OFF</span>
+              </div>
+              <h4 className="text-lg font-extrabold text-white">Anual Família</h4>
+              <div className="my-4 pb-4 border-b border-slate-800">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xs font-bold text-emerald-400">12x R$</span>
+                  <span className="text-3xl font-black text-white">24,90</span>
+                  <span className="text-xs font-semibold text-slate-400">/mês</span>
+                </div>
+                <p className="text-[11px] text-slate-300 mt-1">
+                  Total de <strong className="text-white">R$ 298,80/ano</strong> no cartão ou PIX
+                </p>
+              </div>
+              <ul className="space-y-2 text-xs text-slate-200 mb-6">
+                {[
+                  'Tudo do Plano Mensal por 12 meses completos',
+                  'Parcelamento em até 12x de R$ 24,90 no cartão',
+                  'Economia real de R$ 60,00 no orçamento anual',
+                  'Visão completa de Provisões Anuais (IPVA, IPTU)',
+                  'Atendimento e suporte prioritário via WhatsApp',
+                ].map(item => (
+                  <li key={item} className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openPlanCheckoutWhatsApp('ANNUAL')}
+              className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_6px_20px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Ativar Plano Anual (12x R$ 24,90)
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            Pagamento rápido via PIX ou Cartão de Crédito com liberação imediata.
+          </span>
+          {contactPhone && !contactPhone.endsWith('0000-0000') && (
+            <span className="text-slate-300 font-semibold">Atendimento Comercial: {contactPhone}</span>
+          )}
+        </div>
       </div>
     </div>
   );

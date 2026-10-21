@@ -21,6 +21,7 @@ import {
   FileDown,
   Share2,
   X,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   CATEGORY_COLORS,
@@ -62,6 +63,9 @@ interface DashboardOverviewTabProps {
   canSettleTransactions: boolean;
   payingExpenses: boolean;
   onPayExpenses: (expenses: any[]) => void;
+  familyId?: string;
+  onOpenNewTransactionModal?: (type: 'EXPENSE' | 'INCOME') => void;
+  onOpenNewCardModal?: () => void;
 }
 
 export default function DashboardOverviewTab({
@@ -89,11 +93,101 @@ export default function DashboardOverviewTab({
   canSettleTransactions,
   payingExpenses,
   onPayExpenses,
+  familyId = '1',
+  onOpenNewTransactionModal,
+  onOpenNewCardModal,
 }: DashboardOverviewTabProps) {
   const [monthlySummaryMessage, setMonthlySummaryMessage] = useState('');
   const [hoveredCreditCardCategory, setHoveredCreditCardCategory] = useState<string | null>(null);
   const [selectedCreditCardCategory, setSelectedCreditCardCategory] = useState<string | null>(null);
   const [hoveredProjectionPointIndex, setHoveredProjectionPointIndex] = useState<number | null>(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(`@FinanFamily:onboardingDismissed:${familyId}`) === '1';
+  });
+
+  const dismissOnboarding = () => {
+    setOnboardingDismissed(true);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`@FinanFamily:onboardingDismissed:${familyId}`, '1');
+    }
+  };
+
+  const reopenOnboarding = () => {
+    setOnboardingDismissed(false);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(`@FinanFamily:onboardingDismissed:${familyId}`);
+    }
+  };
+
+  const onboardingSteps = [
+    {
+      id: 'account',
+      title: '1. Configurar Conta e Saldo',
+      description: 'Ajuste o saldo atual ou cadastre o banco da família.',
+      completed:
+        accounts.length > 1 ||
+        (accounts.length === 1 &&
+          (Number(accounts[0].balance) !== 0 ||
+            Number(accounts[0].initial_balance) !== 0 ||
+            (Boolean(accounts[0].bank_name) && accounts[0].bank_name !== 'Conta Principal'))),
+      ctaLabel: 'Configurar Conta',
+      onAction: () => {
+        setActiveModule('cadastros');
+        setActiveSubMenu('contas');
+      },
+    },
+    {
+      id: 'income',
+      title: '2. Lançar Receita do Mês',
+      description: 'Registre o salário ou entradas previstas da casa.',
+      completed: transactions.some(t => t.type === 'INCOME'),
+      ctaLabel: '+ Lançar Receita',
+      onAction: () => {
+        if (onOpenNewTransactionModal) onOpenNewTransactionModal('INCOME');
+        else setActiveModule('receber');
+      },
+    },
+    {
+      id: 'expense',
+      title: '3. Lançar Contas a Pagar',
+      description: 'Adicione suas despesas fixas, variáveis ou boletos.',
+      completed: transactions.some(t => t.type === 'EXPENSE'),
+      ctaLabel: '+ Lançar Despesa',
+      onAction: () => {
+        if (onOpenNewTransactionModal) onOpenNewTransactionModal('EXPENSE');
+        else setActiveModule('pagar');
+      },
+    },
+    {
+      id: 'card',
+      title: '4. Cadastrar Cartão de Crédito',
+      description: 'Controle limites, fechamento e faturas automaticamente.',
+      completed: creditCards.length > 0,
+      ctaLabel: '+ Novo Cartão',
+      onAction: () => {
+        if (onOpenNewCardModal) onOpenNewCardModal();
+        else {
+          setActiveModule('cadastros');
+          setActiveSubMenu('cartoes');
+        }
+      },
+    },
+    {
+      id: 'budget',
+      title: '5. Definir Teto de Gastos',
+      description: 'Coloque metas mensais nas categorias para não estourar.',
+      completed: categories.some(c => Number(c.budget_amount) > 0),
+      ctaLabel: 'Definir Tetos',
+      onAction: () => {
+        setActiveModule('cadastros');
+        setActiveSubMenu('categorias');
+      },
+    },
+  ];
+
+  const completedOnboardingCount = onboardingSteps.filter(step => step.completed).length;
+  const onboardingProgressPct = Math.round((completedOnboardingCount / onboardingSteps.length) * 100);
 
   const totalBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance || curr.current_balance || 0), 0);
 
@@ -663,8 +757,99 @@ export default function DashboardOverviewTab({
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+          {onboardingDismissed && completedOnboardingCount < onboardingSteps.length && (
+            <button
+              type="button"
+              onClick={reopenOnboarding}
+              className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/20 text-xs font-bold transition-colors cursor-pointer"
+            >
+              Primeiros Passos ({completedOnboardingCount}/{onboardingSteps.length})
+            </button>
+          )}
         </div>
       </div>
+
+      {/* CHECKLIST DE PRIMEIROS PASSOS (ONBOARDING GUIADO) */}
+      {!onboardingDismissed && (
+        <div className="bg-slate-900/95 border border-emerald-500/30 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-extrabold uppercase tracking-wider mb-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>
+                  Primeiros Passos da Família • {completedOnboardingCount} de {onboardingSteps.length} concluídos ({onboardingProgressPct}%)
+                </span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-extrabold text-white">
+                {completedOnboardingCount === onboardingSteps.length
+                  ? 'Parabéns! Sua família já está com o painel 100% configurado!'
+                  : 'Comece por aqui para organizar as finanças da casa em 5 minutos'}
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-3 self-start sm:self-center">
+              <div className="w-28 sm:w-36 h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
+                  style={{ width: `${onboardingProgressPct}%` }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={dismissOnboarding}
+                className="text-xs font-bold text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg border border-slate-800 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                {completedOnboardingCount === onboardingSteps.length ? 'Concluir' : 'Ocultar'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {onboardingSteps.map(step => (
+              <div
+                key={step.id}
+                className={`rounded-2xl p-4 border flex flex-col justify-between transition-all ${
+                  step.completed
+                    ? 'bg-emerald-500/10 border-emerald-500/30'
+                    : 'bg-slate-950/90 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span
+                      className={`text-xs font-extrabold ${
+                        step.completed ? 'text-emerald-300 line-through' : 'text-white'
+                      }`}
+                    >
+                      {step.title}
+                    </span>
+                    {step.completed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <span className="w-4 h-4 rounded-full border-2 border-slate-600 shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed mb-3">{step.description}</p>
+                </div>
+
+                {step.completed ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Concluído
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={step.onAction}
+                    className="w-full py-2 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border border-emerald-500/30 font-extrabold text-xs transition-all cursor-pointer"
+                  >
+                    {step.ctaLabel}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 1. CARDS MODERNOS DE INDICADORES (KPIs) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">

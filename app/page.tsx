@@ -209,7 +209,7 @@ export default function LandingPage() {
               Entrar
             </Link>
             <Link
-              href="/login"
+              href="/login?mode=register"
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:scale-[1.02]"
             >
               <span>Testar 10 Dias Grátis</span>
@@ -264,7 +264,7 @@ export default function LandingPage() {
                 Já tenho conta (Entrar)
               </Link>
               <Link
-                href="/login"
+                href="/login?mode=register"
                 className="w-full text-center py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-sm font-extrabold"
               >
                 Testar 10 Dias Grátis
@@ -299,7 +299,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
             <Link
-              href="/login"
+              href="/login?mode=register"
               className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-8 py-4 rounded-2xl flex items-center justify-center gap-2.5 text-base transition-all shadow-[0_8px_30px_rgba(16,185,129,0.35)] hover:scale-[1.02]"
             >
               Começar 10 Dias Grátis
@@ -829,7 +829,7 @@ export default function LandingPage() {
                       Baixar o PDF Novamente
                     </button>
                     <Link
-                      href="/login"
+                      href="/login?mode=register"
                       className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg transition-all"
                     >
                       Colocar em Prática: Testar 10 Dias Grátis
@@ -1286,7 +1286,7 @@ export default function LandingPage() {
               </div>
 
               <Link
-                href="/login"
+                href="/login?mode=register"
                 className="w-full bg-slate-800 hover:bg-slate-700 text-white font-extrabold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 text-base transition-all border border-slate-700"
               >
                 Começar 10 Dias Grátis
@@ -1349,7 +1349,7 @@ export default function LandingPage() {
               </div>
 
               <Link
-                href="/login"
+                href="/login?mode=register"
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 text-base transition-all shadow-[0_8px_25px_rgba(16,185,129,0.35)] hover:scale-[1.01]"
               >
                 Testar 10 Dias Grátis no Plano Anual
@@ -1432,7 +1432,7 @@ export default function LandingPage() {
             <Link href="/login" className="hover:text-emerald-400 transition-colors">
               Entrar
             </Link>
-            <Link href="/login" className="hover:text-emerald-400 transition-colors">
+            <Link href="/login?mode=register" className="hover:text-emerald-400 transition-colors">
               Testar 10 Dias Grátis
             </Link>
           </div>

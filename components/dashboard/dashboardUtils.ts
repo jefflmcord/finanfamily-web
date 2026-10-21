@@ -18,6 +18,15 @@ export interface UserProfile {
   bio: string;
 }
 
+export interface FamilySubscriptionInfo {
+  familyName: string;
+  planType: 'TRIAL' | 'MONTHLY' | 'ANNUAL' | 'COURTESY';
+  registeredAt: string | null;
+  trialEndsAt: string | null;
+  subscriptionEndsAt: string | null;
+  contactPhone: string;
+}
+
 export interface FamilyAccess {
   familyId: string;
   role: 'OWNER' | 'MEMBER';
@@ -26,6 +35,7 @@ export interface FamilyAccess {
     message: string;
     type: 'INFO' | 'SUCCESS' | 'WARNING';
   };
+  subscription?: FamilySubscriptionInfo;
 }
 
 export interface SettlementEntry {

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus, Users } from 'lucide-react';
+import { Loader2, Plus, Users, Sparkles } from 'lucide-react';
 import CreditCardList from '@/components/CreditCardList';
 import AccountsManager from '@/components/AccountsManager';
 import CategoriesManager from '@/components/CategoriesManager';
@@ -45,6 +45,7 @@ import {
   EditTransactionModal,
   NewGoalModal,
   SettlementModal,
+  SubscriptionUpgradeModal,
 } from '@/components/dashboard/DashboardModals';
 
 const getInterfaceTheme = (): InterfaceTheme =>
@@ -173,6 +174,7 @@ export default function DashboardPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [txToDelete, setTxToDelete] = useState<any>(null);
   const [deleteScope, setDeleteScope] = useState<'single' | 'all'>('single');
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('theme-light', theme === 'light');
@@ -1104,6 +1106,50 @@ export default function DashboardPage() {
         />
 
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-10 pb-24 md:pb-10 max-w-7xl w-full mx-auto space-y-6 md:space-y-8">
+          {familyAccess?.subscription?.planType === 'TRIAL' && (() => {
+            const rawTrialEnd = familyAccess.subscription.trialEndsAt;
+            const trialEndMs = rawTrialEnd ? new Date(rawTrialEnd).getTime() : NaN;
+            const daysRemaining = Number.isFinite(trialEndMs)
+              ? Math.ceil((trialEndMs - Date.now()) / (1000 * 60 * 60 * 24))
+              : 10;
+            const isUrgent = daysRemaining <= 3;
+
+            return (
+              <div
+                className={`rounded-2xl border px-4 py-3 text-xs sm:text-sm font-medium flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  daysRemaining <= 0
+                    ? 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+                    : isUrgent
+                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span>
+                    {daysRemaining > 0 ? (
+                      <>
+                        <strong>Período de Teste Gratuito:</strong> restam{' '}
+                        <strong>{daysRemaining} dia(s)</strong> de acesso completo para sua família.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Seu período de teste de 10 dias encerrou.</strong> Ative seu plano Mensal (R$ 29,90) ou Anual (12x R$ 24,90) para manter o acesso da família.
+                      </>
+                    )}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSubscriptionModalOpen(true)}
+                  className="self-start sm:self-center shrink-0 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition-all cursor-pointer shadow-sm"
+                >
+                  {daysRemaining <= 0 ? 'Escolher Plano Agora' : 'Ver Planos / Assinar'}
+                </button>
+              </div>
+            );
+          })()}
+
           {familyAccess?.broadcast?.message && (
             <div
               role="status"
@@ -1151,6 +1197,12 @@ export default function DashboardPage() {
               canSettleTransactions={canSettleTransactions}
               payingExpenses={payingExpenses}
               onPayExpenses={handlePayExpenses}
+              familyId={familyId}
+              onOpenNewTransactionModal={type => {
+                setTxType(type);
+                setIsTxModalOpen(true);
+              }}
+              onOpenNewCardModal={() => setIsCardModalOpen(true)}
             />
           )}
 
@@ -1411,6 +1463,20 @@ export default function DashboardPage() {
         savingCard={savingCard}
         onClose={() => setIsCardModalOpen(false)}
         onSubmit={handleSaveCard}
+      />
+
+      <SubscriptionUpgradeModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        userName={userName}
+        userEmail={userEmail}
+        familyId={familyId}
+        contactPhone={familyAccess?.subscription?.contactPhone}
+        daysRemaining={
+          familyAccess?.subscription?.trialEndsAt
+            ? Math.ceil((new Date(familyAccess.subscription.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : null
+        }
       />
     </div>
   );
