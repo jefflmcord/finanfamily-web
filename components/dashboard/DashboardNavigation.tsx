@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   Wallet,
@@ -22,7 +22,9 @@ import {
   Moon,
   Loader2,
   Upload,
+  Lock,
 } from 'lucide-react';
+import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
 import {
   DashboardModule,
@@ -249,7 +251,57 @@ export function SettingsDrawer({
   theme,
   onToggleTheme,
 }: SettingsDrawerProps) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordNotice, setPasswordNotice] = useState('');
+
   if (!isOpen) return null;
+
+  const hasExistingPassword = profile.has_password !== false;
+
+  const handleSavePassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError('');
+    setPasswordNotice('');
+
+    if (newPassword.length < 6) {
+      setPasswordError('A nova senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('A confirmação da nova senha não confere.');
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      const response = await authenticatedFetch(`${API_URL}/api/family/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Não foi possível atualizar sua senha.');
+      }
+
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setProfile(current => ({ ...current, has_password: true }));
+      setPasswordNotice(result.message || 'Senha atualizada com sucesso!');
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Erro ao atualizar sua senha.');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[60]">
@@ -409,6 +461,93 @@ export function SettingsDrawer({
                   {savingProfile ? 'Salvando...' : 'Guardar alterações'}
                 </button>
               </form>
+
+              {/* Seção de Segurança e Troca de Senha */}
+              <div className="mt-6 pt-6 border-t border-slate-800">
+                <div className="mb-4 flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      {hasExistingPassword ? 'Alterar senha de acesso' : 'Definir senha de acesso'}
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {hasExistingPassword
+                        ? 'Atualize sua senha sempre que desejar manter sua conta protegida.'
+                        : 'Você entrou com o Google. Defina uma senha caso queira entrar também com e-mail e senha.'}
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSavePassword} className="space-y-3.5">
+                  {hasExistingPassword && (
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-300">Senha atual</span>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Digite sua senha atual"
+                        value={currentPassword}
+                        onChange={event => setCurrentPassword(event.target.value)}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                  )}
+
+                  <div className="grid gap-3.5 sm:grid-cols-2">
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-300">Nova senha</span>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        placeholder="Mínimo 6 caracteres"
+                        value={newPassword}
+                        onChange={event => setNewPassword(event.target.value)}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                    </label>
+
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-300">Confirmar nova senha</span>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        placeholder="Repita a nova senha"
+                        value={confirmNewPassword}
+                        onChange={event => setConfirmNewPassword(event.target.value)}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                  </div>
+
+                  {passwordError && (
+                    <p role="alert" className="text-xs font-medium text-rose-400">
+                      {passwordError}
+                    </p>
+                  )}
+                  {passwordNotice && (
+                    <p role="status" className="text-xs font-medium text-emerald-400">
+                      {passwordNotice}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={savingPassword}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2.5 text-xs sm:text-sm font-extrabold text-emerald-300 transition-colors hover:bg-emerald-500 hover:text-slate-950 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+                  >
+                    {savingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                    {savingPassword
+                      ? 'Atualizando senha...'
+                      : hasExistingPassword
+                        ? 'Atualizar minha senha'
+                        : 'Salvar senha de acesso'}
+                  </button>
+                </form>
+              </div>
             </section>
           )}
 

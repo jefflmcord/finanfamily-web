@@ -284,7 +284,15 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Senha</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold uppercase text-slate-400">Senha</label>
+                <Link
+                  href="/esqueci-a-senha"
+                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  Esqueci minha senha
+                </Link>
+              </div>
               <input
                 type="password"
                 required

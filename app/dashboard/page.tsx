@@ -302,6 +302,7 @@ export default function DashboardPage() {
         avatar_url: typeof profileData.avatar_url === 'string' ? profileData.avatar_url : '',
         birth_date: typeof profileData.birth_date === 'string' ? profileData.birth_date.slice(0, 10) : '',
         bio: typeof profileData.bio === 'string' ? profileData.bio : '',
+        has_password: typeof profileData.has_password === 'boolean' ? profileData.has_password : true,
       };
       setProfile(loadedProfile);
       setUserName(loadedProfile.name || 'Família');

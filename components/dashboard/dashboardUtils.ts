@@ -16,6 +16,7 @@ export interface UserProfile {
   avatar_url: string;
   birth_date: string;
   bio: string;
+  has_password?: boolean;
 }
 
 export interface FamilySubscriptionInfo {
