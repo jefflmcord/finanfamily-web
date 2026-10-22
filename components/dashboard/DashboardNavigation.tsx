@@ -25,6 +25,9 @@ import {
   ShieldAlert,
   Users,
   BookOpen,
+  ShoppingCart,
+  Tag,
+  PieChart,
 } from 'lucide-react';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
@@ -147,6 +150,20 @@ export function DashboardHeader({
               }`}
             >
               Investimentos
+            </button>
+            <button
+              onClick={() => {
+                setActiveModule('mercado');
+                setActiveSubMenu('listas');
+              }}
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 cursor-pointer ${
+                activeModule === 'mercado'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              Mercado
             </button>
           </>
         )}
@@ -711,6 +728,18 @@ export function DashboardSidebar({
             <Target className="w-4 h-4 inline mr-1.5" />
             Investimentos
           </button>
+          <button
+            onClick={() => {
+              setActiveModule('mercado');
+              setActiveSubMenu('listas');
+            }}
+            className={`col-span-2 rounded-xl px-3 py-2.5 text-xs font-bold ${
+              activeModule === 'mercado' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-300'
+            }`}
+          >
+            <ShoppingCart className="w-4 h-4 inline mr-1.5" />
+            Mercado & Compras
+          </button>
           {isInternalAdmin && (
             <button
               onClick={() => {
@@ -846,6 +875,49 @@ export function DashboardSidebar({
               }`}
             >
               <PiggyBank className="w-5 h-5" /> Provisões anuais
+            </button>
+          </>
+        )}
+        {activeModule === 'mercado' && canReadFamily && (
+          <>
+            <button
+              onClick={() => {
+                setActiveSubMenu('listas');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'listas'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ShoppingCart className="w-5 h-5" /> Lista & Carrinho
+            </button>
+            <button
+              onClick={() => {
+                setActiveSubMenu('historico_precos');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'historico_precos'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Tag className="w-5 h-5" /> Comparador & Inflação
+            </button>
+            <button
+              onClick={() => {
+                setActiveSubMenu('analise_mercado');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'analise_mercado'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <PieChart className="w-5 h-5" /> Raio-X por Corredor
             </button>
           </>
         )}

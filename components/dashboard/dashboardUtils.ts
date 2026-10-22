@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 
 export type InterfaceTheme = 'dark' | 'light';
 export type SettingsSection = 'profile' | 'appearance' | 'family';
-export type DashboardModule = 'cadastros' | 'pagar' | 'receber' | 'investimentos' | 'gestao';
+export type DashboardModule = 'cadastros' | 'pagar' | 'receber' | 'investimentos' | 'mercado' | 'gestao';
 export type FilterPeriod = 'CURRENT_MONTH' | 'CURRENT_YEAR' | 'LAST_60_DAYS' | 'CUSTOM' | 'ALL';
 export type FilterStatus = 'ALL' | 'PENDING' | 'PAID' | 'OVERDUE';
 export type ChartStatusMode = 'ALL' | 'PAID' | 'PENDING';

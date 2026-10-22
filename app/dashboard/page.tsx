@@ -34,6 +34,7 @@ import {
 } from '@/components/dashboard/DashboardNavigation';
 import DashboardOverviewTab from '@/components/dashboard/DashboardOverviewTab';
 import SmartImportModal from '@/components/dashboard/SmartImportModal';
+import SupermarketModule from '@/components/dashboard/SupermarketModule';
 import { InternalCrmPanel } from '@/app/relatorio-interno/page';
 import {
   InvestmentGoalsSection,
@@ -1454,6 +1455,17 @@ export default function DashboardPage() {
 
           {activeModule === 'investimentos' && activeSubMenu === 'provisoes' && canReadFamily && (
             <AnnualProvisionsManager canManage={canManageProvisions} />
+          )}
+
+          {activeModule === 'mercado' && canReadFamily && (
+            <SupermarketModule
+              activeSubMenu={activeSubMenu}
+              setActiveSubMenu={setActiveSubMenu}
+              accounts={accounts}
+              creditCards={creditCards}
+              categories={categories}
+              onRefreshFinancialData={fetchData}
+            />
           )}
 
           {activeModule === 'gestao' && (
