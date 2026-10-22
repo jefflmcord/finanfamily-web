@@ -100,8 +100,23 @@ const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
 const formatCurrencyBRL = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-export default function InternalTenantReportPage() {
-  const [activeMainSection, setActiveMainSection] = useState<'TENANTS' | 'LEADS'>('TENANTS');
+interface InternalCrmPanelProps {
+  embedded?: boolean;
+  activeSectionOverride?: 'TENANTS' | 'LEADS';
+  onChangeSection?: (section: 'TENANTS' | 'LEADS') => void;
+}
+
+export function InternalCrmPanel({
+  embedded = false,
+  activeSectionOverride,
+  onChangeSection,
+}: InternalCrmPanelProps) {
+  const [internalSection, setInternalSection] = useState<'TENANTS' | 'LEADS'>('TENANTS');
+  const activeMainSection = activeSectionOverride ?? internalSection;
+  const setActiveMainSection = (section: 'TENANTS' | 'LEADS') => {
+    setInternalSection(section);
+    onChangeSection?.(section);
+  };
   const [tenants, setTenants] = useState<TenantReportRow[]>([]);
   const [leads, setLeads] = useState<MarketingLeadRow[]>([]);
   const [contactPhone, setContactPhone] = useState('');
@@ -761,17 +776,52 @@ export default function InternalTenantReportPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400 transition-colors hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4" /> Voltar ao dashboard
-          </Link>
+    <div className={embedded ? 'space-y-6 text-slate-50' : 'min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8'}>
+      <div className={embedded ? '' : 'mx-auto max-w-7xl'}>
+        {!embedded && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400 transition-colors hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" /> Voltar ao dashboard
+            </Link>
 
-          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={activeMainSection === 'TENANTS' ? exportTenantsCsv : exportLeadsCsv}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-200 transition-colors hover:border-emerald-500/40 hover:text-white cursor-pointer"
+              >
+                <Download className="h-4 w-4 text-emerald-400" />
+                {activeMainSection === 'TENANTS' ? 'Exportar Clientes (CSV)' : 'Exportar Leads do E-book (CSV)'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 shadow-lg">
+                <ShieldAlert className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  Backoffice & CRM SaaS • FinanFamily
+                </p>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+                  Central de Gestão do Negócio
+                </h1>
+              </div>
+            </div>
+            <p className="mt-2.5 text-sm text-slate-400 max-w-3xl">
+              Gerencie seus clientes em período de teste (10 dias), acompanhe os leads captados pelo E-book na Landing Page,
+              controle assinaturas Mensais (R$ 29,90) e Anuais (R$ 298,80) e acione contatos no WhatsApp com 1 clique.
+            </p>
+          </div>
+
+          {embedded && (
             <button
               type="button"
               onClick={activeMainSection === 'TENANTS' ? exportTenantsCsv : exportLeadsCsv}
@@ -780,27 +830,7 @@ export default function InternalTenantReportPage() {
               <Download className="h-4 w-4 text-emerald-400" />
               {activeMainSection === 'TENANTS' ? 'Exportar Clientes (CSV)' : 'Exportar Leads do E-book (CSV)'}
             </button>
-          </div>
-        </div>
-
-        <header className="mb-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 shadow-lg">
-              <ShieldAlert className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                Backoffice & CRM SaaS • FinanFamily
-              </p>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
-                Central de Gestão do Negócio
-              </h1>
-            </div>
-          </div>
-          <p className="mt-2.5 text-sm text-slate-400 max-w-3xl">
-            Gerencie seus clientes em período de teste (10 dias), acompanhe os leads captados pelo E-book na Landing Page,
-            controle assinaturas Mensais (R$ 29,90) e Anuais (R$ 298,80) e acione contatos no WhatsApp com 1 clique.
-          </p>
+          )}
         </header>
 
         {loading ? (
@@ -1749,6 +1779,10 @@ export default function InternalTenantReportPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
+}
+
+export default function InternalTenantReportPage() {
+  return <InternalCrmPanel embedded={false} />;
 }

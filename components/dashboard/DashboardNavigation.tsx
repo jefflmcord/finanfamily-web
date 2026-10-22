@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import {
   Wallet,
   PlusCircle,
@@ -23,6 +22,9 @@ import {
   Loader2,
   Upload,
   Lock,
+  ShieldAlert,
+  Users,
+  BookOpen,
 } from 'lucide-react';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
@@ -33,6 +35,8 @@ import {
   SettingsSection,
   UserProfile,
 } from './dashboardUtils';
+
+const INTERNAL_ADMIN_EMAIL = 'jeffersonluismattosocordeiro@gmail.com';
 
 interface DashboardHeaderProps {
   activeModule: DashboardModule;
@@ -75,6 +79,7 @@ export function DashboardHeader({
     .join('')
     .toLocaleUpperCase('pt-BR');
   const userFirstName = userName.trim().split(/\s+/)[0] || 'Usuário';
+  const isInternalAdmin = userEmail.trim().toLowerCase() === INTERNAL_ADMIN_EMAIL;
 
   return (
     <header className="bg-slate-900 border-b border-slate-800 h-16 sm:h-20 px-4 sm:px-6 flex items-center justify-between z-30">
@@ -144,6 +149,22 @@ export function DashboardHeader({
               Investimentos
             </button>
           </>
+        )}
+        {isInternalAdmin && (
+          <button
+            onClick={() => {
+              setActiveModule('gestao');
+              setActiveSubMenu('clientes');
+            }}
+            className={`px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 transition-colors cursor-pointer ${
+              activeModule === 'gestao'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-amber-300 hover:text-white'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4" />
+            Gestão & CRM
+          </button>
         )}
       </nav>
       <div className="flex items-center gap-1 sm:gap-3">
@@ -359,15 +380,6 @@ export function SettingsDrawer({
               </button>
             ))}
           </nav>
-          {userEmail.toLowerCase() === 'jeffersonluismattosocordeiro@gmail.com' && (
-            <Link
-              href="/relatorio-interno"
-              onClick={onClose}
-              className="block rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-center text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/20"
-            >
-              Relatório interno de tenants
-            </Link>
-          )}
 
           {settingsSection === 'profile' && (
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
@@ -614,6 +626,7 @@ interface DashboardSidebarProps {
   activeSubMenu: string;
   setActiveSubMenu: (subMenu: string) => void;
   canReadFamily: boolean;
+  userEmail?: string;
 }
 
 export function DashboardSidebar({
@@ -624,7 +637,10 @@ export function DashboardSidebar({
   activeSubMenu,
   setActiveSubMenu,
   canReadFamily,
+  userEmail = '',
 }: DashboardSidebarProps) {
+  const isInternalAdmin = userEmail.trim().toLowerCase() === INTERNAL_ADMIN_EMAIL;
+
   return (
     <>
       {mobileMenuOpen && (
@@ -695,6 +711,22 @@ export function DashboardSidebar({
             <Target className="w-4 h-4 inline mr-1.5" />
             Investimentos
           </button>
+          {isInternalAdmin && (
+            <button
+              onClick={() => {
+                setActiveModule('gestao');
+                setActiveSubMenu('clientes');
+              }}
+              className={`col-span-2 rounded-xl px-3 py-2.5 text-xs font-bold ${
+                activeModule === 'gestao'
+                  ? 'bg-emerald-500 text-slate-950'
+                  : 'bg-slate-950 text-amber-300 border border-amber-500/30'
+              }`}
+            >
+              <ShieldAlert className="w-4 h-4 inline mr-1.5" />
+              Gestão & CRM
+            </button>
+          )}
         </div>
         <p className="text-xs uppercase font-extrabold text-slate-500 px-3 pb-1">Menus do Módulo</p>
         {activeModule === 'cadastros' && (
@@ -814,6 +846,36 @@ export function DashboardSidebar({
               }`}
             >
               <PiggyBank className="w-5 h-5" /> Provisões anuais
+            </button>
+          </>
+        )}
+        {activeModule === 'gestao' && isInternalAdmin && (
+          <>
+            <button
+              onClick={() => {
+                setActiveSubMenu('clientes');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'clientes'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Users className="w-5 h-5" /> Clientes & Assinaturas
+            </button>
+            <button
+              onClick={() => {
+                setActiveSubMenu('leads');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'leads'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <BookOpen className="w-5 h-5" /> Leads do E-book
             </button>
           </>
         )}

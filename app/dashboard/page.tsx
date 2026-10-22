@@ -34,6 +34,7 @@ import {
 } from '@/components/dashboard/DashboardNavigation';
 import DashboardOverviewTab from '@/components/dashboard/DashboardOverviewTab';
 import SmartImportModal from '@/components/dashboard/SmartImportModal';
+import { InternalCrmPanel } from '@/app/relatorio-interno/page';
 import {
   InvestmentGoalsSection,
   PayablesSection,
@@ -1209,6 +1210,7 @@ export default function DashboardPage() {
           activeSubMenu={activeSubMenu}
           setActiveSubMenu={setActiveSubMenu}
           canReadFamily={canReadFamily}
+          userEmail={userEmail}
         />
 
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-10 pb-24 md:pb-10 max-w-7xl w-full mx-auto space-y-6 md:space-y-8">
@@ -1452,6 +1454,14 @@ export default function DashboardPage() {
 
           {activeModule === 'investimentos' && activeSubMenu === 'provisoes' && canReadFamily && (
             <AnnualProvisionsManager canManage={canManageProvisions} />
+          )}
+
+          {activeModule === 'gestao' && (
+            <InternalCrmPanel
+              embedded
+              activeSectionOverride={activeSubMenu === 'leads' ? 'LEADS' : 'TENANTS'}
+              onChangeSection={sec => setActiveSubMenu(sec === 'LEADS' ? 'leads' : 'clientes')}
+            />
           )}
         </main>
       </div>
