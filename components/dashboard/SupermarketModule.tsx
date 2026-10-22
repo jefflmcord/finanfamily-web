@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ShoppingCart,
   Plus,
+  Minus,
   Check,
   Trash2,
   Copy,
@@ -17,12 +18,11 @@ import {
   CheckCircle2,
   Loader2,
   X,
-  ArrowRight,
   PackagePlus,
   Receipt,
   CreditCard,
   Wallet,
-  AlertTriangle,
+  Smartphone,
 } from 'lucide-react';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import { formatCurrency } from './dashboardUtils';
@@ -190,6 +190,11 @@ export default function SupermarketModule({
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Modo Foco Mobile "No Mercado (1 Mão)"
+  const [inStoreFocusMode, setInStoreFocusMode] = useState(false);
+  const [selectedAisleFilter, setSelectedAisleFilter] = useState<string>('ALL');
+  const [isMobileAddSheetOpen, setIsMobileAddSheetOpen] = useState(false);
+
   // Modal Nova Lista
   const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -224,7 +229,7 @@ export default function SupermarketModule({
   const [checkoutCardId, setCheckoutCardId] = useState('');
   const [checkoutCategoryId, setCheckoutCategoryId] = useState('');
   const [checkoutSettleNow, setCheckoutSettleNow] = useState(true);
-  const [checkoutDate, setCheckoutDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [checkoutDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [submittingCheckout, setSubmittingCheckout] = useState(false);
 
   // Busca no Histórico de Preços
@@ -347,13 +352,14 @@ export default function SupermarketModule({
           aisle_category: itemAisle,
           quantity: Number(itemQty) || 1,
           unit: itemUnit,
-          unit_price: Number(itemPrice) || 0,
+          unit_price: Number(itemPrice.replace(',', '.')) || 0,
         }),
       });
       if (!response.ok) throw new Error('Erro ao adicionar item.');
       setItemName('');
       setItemQty('1');
       setItemPrice('');
+      setIsMobileAddSheetOpen(false);
       await fetchShoppingOverview(String(selectedList.id));
     } catch (err) {
       setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Erro ao adicionar item.' });
@@ -382,7 +388,6 @@ export default function SupermarketModule({
   };
 
   const handleUpdateItem = async (item: ShoppingItem, changes: Partial<ShoppingItem>) => {
-    // Atualização otimista imediata para fluidez no corredor do mercado
     setLists(current =>
       current.map(list => {
         if (String(list.id) !== String(item.list_id)) return list;
@@ -416,6 +421,15 @@ export default function SupermarketModule({
     } catch {
       fetchShoppingOverview(String(item.list_id));
     }
+  };
+
+  const handleStepQuantity = (item: ShoppingItem, delta: number) => {
+    const step = item.unit === 'kg' ? 0.5 : 1;
+    const nextQty = Math.max(
+      item.unit === 'kg' ? 0.1 : 1,
+      Math.round((Number(item.quantity || 1) + delta * step) * 100) / 100
+    );
+    handleUpdateItem(item, { quantity: nextQty });
   };
 
   const handleDeleteItem = async (itemId: string | number) => {
@@ -481,6 +495,7 @@ export default function SupermarketModule({
       if (!response.ok) throw new Error(result.error || 'Erro ao finalizar compra.');
 
       setIsCheckoutOpen(false);
+      setInStoreFocusMode(false);
       await fetchShoppingOverview(String(selectedList.id));
       if (checkoutCreateTx) {
         onRefreshFinancialData();
@@ -496,10 +511,29 @@ export default function SupermarketModule({
     }
   };
 
+  // Corredores disponíveis na lista atual (para pílulas deslizáveis no celular)
+  const availableAislesInList = useMemo(() => {
+    if (!selectedList) return [];
+    const counts = new Map<string, { total: number; pending: number }>();
+    for (const item of selectedList.items) {
+      const aisle = item.aisle_category || 'Mercearia';
+      const prev = counts.get(aisle) || { total: 0, pending: 0 };
+      prev.total += 1;
+      if (!item.is_checked) prev.pending += 1;
+      counts.set(aisle, prev);
+    }
+    return Array.from(counts.entries()).map(([aisle, info]) => ({
+      aisle,
+      icon: AISLE_ICONS[aisle] || '🛒',
+      ...info,
+    }));
+  }, [selectedList]);
+
   // Agrupamento de itens da lista selecionada por Corredor
   const groupedItems = useMemo(() => {
     if (!selectedList) return [];
     const filtered = selectedList.items.filter(it => {
+      if (selectedAisleFilter !== 'ALL' && it.aisle_category !== selectedAisleFilter) return false;
       if (filterMode === 'PENDING' && it.is_checked) return false;
       if (filterMode === 'CART' && !it.is_checked) return false;
       if (searchItem.trim()) {
@@ -516,7 +550,7 @@ export default function SupermarketModule({
       groups.set(aisle, arr);
     }
     return Array.from(groups.entries());
-  }, [selectedList, filterMode, searchItem]);
+  }, [selectedList, selectedAisleFilter, filterMode, searchItem]);
 
   // Análise de Gastos por Corredor (Raio-X do Supermercado)
   const aisleAnalytics = useMemo(() => {
@@ -571,81 +605,125 @@ export default function SupermarketModule({
   }
 
   return (
-    <div className="space-y-6">
-      {/* CABEÇALHO DO MÓDULO DE MERCADO */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-lg">
-            <ShoppingCart className="h-6 w-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-white">
-                Mercado & Compras da Casa
-              </h1>
-              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold text-emerald-300">
-                Integrado ao Orçamento
-              </span>
+    <div className="space-y-5 pb-28 md:pb-6">
+      {/* CABEÇALHO DO MÓDULO (OCULTO NO MODO FOCO MOBILE NO MERCADO) */}
+      {!inStoreFocusMode && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-lg">
+              <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
-            <p className="text-xs sm:text-sm text-slate-400">
-              Monte listas por corredor, controle o valor do carrinho em tempo real, compare preços e lance no financeiro com 1 clique.
-            </p>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg sm:text-2xl font-extrabold text-white">
+                  Mercado & Compras
+                </h1>
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-emerald-300">
+                  Mobile-First
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-400">
+                Use com 1 mão no corredor do mercado, veja o carrinho em tempo real e lance no orçamento.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {selectedList && selectedList.status === 'OPEN' && (
+              <button
+                type="button"
+                onClick={() => setInStoreFocusMode(true)}
+                className="md:hidden flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3.5 py-2.5 text-xs font-extrabold text-emerald-300 cursor-pointer"
+              >
+                <Smartphone className="h-4 w-4" />
+                Modo No Mercado (1 Mão)
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsNewListModalOpen(true)}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 py-2.5 text-xs sm:text-sm font-extrabold text-slate-950 shadow-lg transition-all cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              Nova Lista
+            </button>
           </div>
         </div>
+      )}
 
-        <button
-          type="button"
-          onClick={() => setIsNewListModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 py-2.5 text-xs sm:text-sm font-extrabold text-slate-950 shadow-lg transition-all cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
-          Nova Lista de Compras
-        </button>
-      </div>
+      {/* BARRA COMPACTA QUANDO EM "MODO NO MERCADO (1 MÃO)" NO CELULAR */}
+      {inStoreFocusMode && selectedList && (
+        <div className="flex items-center justify-between gap-2 rounded-2xl border border-emerald-500/40 bg-slate-900 px-3.5 py-2.5">
+          <div className="min-w-0">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 block">
+              📱 Modo No Corredor • 1 Mão
+            </span>
+            <p className="text-sm font-black text-white truncate">{selectedList.name}</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsMobileAddSheetOpen(true)}
+              className="inline-flex items-center gap-1 rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-emerald-300 border border-emerald-500/30"
+            >
+              <Plus className="h-3.5 w-3.5" /> Item
+            </button>
+            <button
+              type="button"
+              onClick={() => setInStoreFocusMode(false)}
+              className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-slate-300"
+            >
+              Sair
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* NAVEGAÇÃO RÁPIDA ENTRE AS 3 VISÕES DO MÓDULO */}
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-1.5 w-fit">
-        <button
-          type="button"
-          onClick={() => setActiveSubMenu('listas')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
-            activeSubMenu !== 'historico_precos' && activeSubMenu !== 'analise_mercado'
-              ? 'bg-emerald-500 text-slate-950 shadow-md'
-              : 'text-slate-300 hover:text-white'
-          }`}
-        >
-          <ShoppingCart className="h-4 w-4" />
-          <span>Lista & Modo Carrinho ({lists.length})</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveSubMenu('historico_precos')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
-            activeSubMenu === 'historico_precos'
-              ? 'bg-emerald-500 text-slate-950 shadow-md'
-              : 'text-slate-300 hover:text-white'
-          }`}
-        >
-          <Tag className="h-4 w-4" />
-          <span>Comparador & Inflação ({priceHistory.length})</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveSubMenu('analise_mercado')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
-            activeSubMenu === 'analise_mercado'
-              ? 'bg-emerald-500 text-slate-950 shadow-md'
-              : 'text-slate-300 hover:text-white'
-          }`}
-        >
-          <PieChartIcon className="h-4 w-4" />
-          <span>Raio-X por Corredor</span>
-        </button>
-      </div>
+      {/* NAVEGAÇÃO RÁPIDA ENTRE AS 3 VISÕES DO MÓDULO (DESLIZÁVEL NO MOBILE) */}
+      {!inStoreFocusMode && (
+        <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900 p-1.5 w-full sm:w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveSubMenu('listas')}
+            className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+              activeSubMenu !== 'historico_precos' && activeSubMenu !== 'analise_mercado'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            <span>Lista & Carrinho ({lists.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubMenu('historico_precos')}
+            className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+              activeSubMenu === 'historico_precos'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <Tag className="h-4 w-4" />
+            <span>Preços ({priceHistory.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubMenu('analise_mercado')}
+            className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+              activeSubMenu === 'analise_mercado'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <PieChartIcon className="h-4 w-4" />
+            <span>Raio-X</span>
+          </button>
+        </div>
+      )}
 
       {feedback && (
         <div
-          className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold ${
+          className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-xs sm:text-sm font-semibold ${
             feedback.type === 'error'
               ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
               : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
@@ -655,7 +733,7 @@ export default function SupermarketModule({
           <button
             type="button"
             onClick={() => setFeedback(null)}
-            className="text-xs underline opacity-80 hover:opacity-100"
+            className="text-xs underline opacity-80 hover:opacity-100 ml-3"
           >
             Fechar
           </button>
@@ -666,19 +744,19 @@ export default function SupermarketModule({
       {activeSubMenu !== 'historico_precos' && activeSubMenu !== 'analise_mercado' && (
         <>
           {lists.length === 0 ? (
-            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center space-y-5">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 sm:p-8 text-center space-y-5">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
                 <ShoppingCart className="h-8 w-8" />
               </div>
               <div className="max-w-lg mx-auto space-y-2">
-                <h2 className="text-xl font-extrabold text-white">
+                <h2 className="text-lg sm:text-xl font-extrabold text-white">
                   Sua família ainda não tem nenhuma lista de mercado
                 </h2>
-                <p className="text-sm text-slate-400">
-                  Comece em segundos usando um dos modelos prontos abaixo ou crie uma lista personalizada.
+                <p className="text-xs sm:text-sm text-slate-400">
+                  Toque em um dos modelos abaixo para montar sua primeira lista em 1 segundo:
                 </p>
               </div>
-              <div className="flex flex-wrap justify-center gap-3 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-xl mx-auto pt-2">
                 {[
                   { id: 'COMPRA_MES', label: '🛒 Compra do Mês (25 itens)' },
                   { id: 'FEIRA', label: '🥬 Feira & Hortifrúti (12 itens)' },
@@ -693,7 +771,7 @@ export default function SupermarketModule({
                       setNewListTemplate(tpl.id);
                       setIsNewListModalOpen(true);
                     }}
-                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 py-2.5 text-xs font-extrabold text-emerald-300 transition-all cursor-pointer"
+                    className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 py-3.5 text-xs sm:text-sm font-extrabold text-emerald-300 transition-all cursor-pointer"
                   >
                     {tpl.label}
                   </button>
@@ -701,185 +779,190 @@ export default function SupermarketModule({
               </div>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* SELETOR DE LISTAS */}
-              <div className="flex flex-wrap items-center gap-2">
-                {lists.map(list => {
-                  const isSelected = String(list.id) === String(selectedList?.id);
-                  return (
-                    <button
-                      key={list.id}
-                      type="button"
-                      onClick={() => setSelectedListId(String(list.id))}
-                      className={`group flex items-center gap-2.5 rounded-2xl border px-4 py-2.5 text-left transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-emerald-500 bg-emerald-500/15 text-white shadow-md'
-                          : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs sm:text-sm font-extrabold">{list.name}</span>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                              list.status === 'COMPLETED'
-                                ? 'bg-slate-800 text-slate-300'
-                                : 'bg-emerald-500/20 text-emerald-300'
-                            }`}
-                          >
-                            {list.status === 'COMPLETED' ? 'Concluída' : `${list.checked_items}/${list.total_items}`}
-                          </span>
+            <div className="space-y-4 sm:space-y-6">
+              {/* SELETOR DE LISTAS (DESLIZÁVEL HORIZONTALMENTE NO CELULAR) */}
+              {!inStoreFocusMode && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {lists.map(list => {
+                    const isSelected = String(list.id) === String(selectedList?.id);
+                    return (
+                      <button
+                        key={list.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedListId(String(list.id));
+                          setSelectedAisleFilter('ALL');
+                        }}
+                        className={`shrink-0 flex items-center gap-2.5 rounded-2xl border px-4 py-2.5 text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-emerald-500 bg-emerald-500/15 text-white shadow-md'
+                            : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs sm:text-sm font-extrabold">{list.name}</span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                list.status === 'COMPLETED'
+                                  ? 'bg-slate-800 text-slate-300'
+                                  : 'bg-emerald-500/20 text-emerald-300'
+                              }`}
+                            >
+                              {list.status === 'COMPLETED'
+                                ? 'Concluída'
+                                : `${list.checked_items}/${list.total_items}`}
+                            </span>
+                          </div>
+                          {list.store_name && (
+                            <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                              <Store className="h-3 w-3 text-emerald-400" /> {list.store_name}
+                            </p>
+                          )}
                         </div>
-                        {list.store_name && (
-                          <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                            <Store className="h-3 w-3 text-emerald-400" /> {list.store_name}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {selectedList && (
                 <>
-                  {/* PAINEL DO CARRINHO EM TEMPO REAL ("NO CORREDOR DO MERCADO") */}
-                  <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/30 p-5 sm:p-6 shadow-xl">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                      <div className="space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2.5">
-                          <h2 className="text-lg sm:text-xl font-black text-white">
-                            {selectedList.name}
-                          </h2>
-                          {selectedList.store_name && (
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300">
-                              <Store className="h-3.5 w-3.5 text-emerald-400" />
-                              {selectedList.store_name}
-                            </span>
-                          )}
-                          {selectedList.status === 'COMPLETED' && (
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 text-xs font-bold text-emerald-300">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Compra Finalizada ({formatCurrency(selectedList.total_spent)})
-                            </span>
-                          )}
+                  {/* PAINEL DO CARRINHO (COMPACTO NO CELULAR / COMPLETO NO DESKTOP) */}
+                  {!inStoreFocusMode && (
+                    <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/30 p-4 sm:p-6 shadow-xl">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-base sm:text-xl font-black text-white">
+                              {selectedList.name}
+                            </h2>
+                            {selectedList.store_name && (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-0.5 text-xs font-semibold text-slate-300">
+                                <Store className="h-3 w-3 text-emerald-400" />
+                                {selectedList.store_name}
+                              </span>
+                            )}
+                            {selectedList.status === 'COMPLETED' && (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-bold text-emerald-300">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Concluída ({formatCurrency(selectedList.total_spent)})
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400 hidden sm:block">
+                            Toque nos itens para colocar no carrinho e ajuste a quantidade ou preço com 1 toque.
+                          </p>
                         </div>
-                        <p className="text-xs text-slate-400">
-                          Marque os itens conforme coloca no carrinho e informe o preço da prateleira para acompanhar o total antes de chegar no caixa.
-                        </p>
-                      </div>
 
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        {selectedList.status === 'OPEN' && selectedList.total_items > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {selectedList.status === 'OPEN' && selectedList.total_items > 0 && (
+                            <button
+                              type="button"
+                              onClick={openCheckoutModal}
+                              className="hidden sm:inline-flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 py-2.5 text-xs sm:text-sm font-extrabold text-slate-950 shadow-lg transition-all cursor-pointer"
+                            >
+                              <Receipt className="h-4 w-4" />
+                              Finalizar Compra & Lançar no Financeiro
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={openCheckoutModal}
-                            className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 py-2.5 text-xs sm:text-sm font-extrabold text-slate-950 shadow-lg transition-all cursor-pointer"
+                            onClick={() => handleDuplicateList(selectedList.id, selectedList.name)}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 transition-colors cursor-pointer"
                           >
-                            <Receipt className="h-4 w-4" />
-                            Finalizar Compra & Lançar no Financeiro
+                            <Copy className="h-3.5 w-3.5 text-emerald-400" />
+                            Reaproveitar Lista
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicateList(selectedList.id, selectedList.name)}
-                          title="Criar uma nova lista reaproveitando estes itens e últimos preços"
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-950 hover:bg-slate-800 px-3.5 py-2.5 text-xs font-bold text-slate-200 transition-colors cursor-pointer"
-                        >
-                          <Copy className="h-3.5 w-3.5 text-emerald-400" />
-                          Reaproveitar Lista
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteList(selectedList.id)}
-                          title="Excluir lista"
-                          className="inline-flex items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-2.5 text-xs font-bold text-rose-300 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* INDICADORES DO CARRINHO */}
-                    <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="rounded-2xl border border-emerald-500/25 bg-slate-950/90 p-4">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
-                          Total no Carrinho (Itens Marcados)
-                        </span>
-                        <p className="mt-1 text-2xl font-black text-white">
-                          {formatCurrency(selectedList.cart_total)}
-                        </p>
-                        <span className="text-xs text-slate-400">
-                          {selectedList.checked_items} de {selectedList.total_items} itens no carrinho
-                        </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteList(selectedList.id)}
+                            className="inline-flex items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-2 text-xs font-bold text-rose-300 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-800 bg-slate-950/90 p-4">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-sky-400">
-                          Estimativa da Lista Completa
-                        </span>
-                        <p className="mt-1 text-2xl font-black text-white">
-                          {formatCurrency(selectedList.estimated_total)}
-                        </p>
-                        <span className="text-xs text-slate-400">
-                          Soma de todos os {selectedList.total_items} itens planejados
-                        </span>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-800 bg-slate-950/90 p-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
-                            Meta / Limite da Compra
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
+                        <div className="rounded-2xl border border-emerald-500/25 bg-slate-950/90 p-3 sm:p-4">
+                          <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                            No Carrinho
                           </span>
-                          {selectedList.budget_limit > 0 && (
-                            <span
-                              className={`text-xs font-extrabold ${
-                                selectedList.cart_total > selectedList.budget_limit
-                                  ? 'text-rose-400'
-                                  : 'text-emerald-400'
-                              }`}
-                            >
-                              {Math.round((selectedList.cart_total / selectedList.budget_limit) * 100)}%
+                          <p className="mt-0.5 text-lg sm:text-2xl font-black text-white">
+                            {formatCurrency(selectedList.cart_total)}
+                          </p>
+                          <span className="text-[11px] text-slate-400">
+                            {selectedList.checked_items}/{selectedList.total_items} itens
+                          </span>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-800 bg-slate-950/90 p-3 sm:p-4">
+                          <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-sky-400">
+                            Total Estimado
+                          </span>
+                          <p className="mt-0.5 text-lg sm:text-2xl font-black text-white">
+                            {formatCurrency(selectedList.estimated_total)}
+                          </p>
+                          <span className="text-[11px] text-slate-400">Lista completa</span>
+                        </div>
+
+                        <div className="col-span-2 sm:col-span-1 rounded-2xl border border-slate-800 bg-slate-950/90 p-3 sm:p-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                              Meta da Compra
                             </span>
+                            {selectedList.budget_limit > 0 && (
+                              <span
+                                className={`text-xs font-extrabold ${
+                                  selectedList.cart_total > selectedList.budget_limit
+                                    ? 'text-rose-400'
+                                    : 'text-emerald-400'
+                                }`}
+                              >
+                                {Math.round(
+                                  (selectedList.cart_total / selectedList.budget_limit) * 100
+                                )}
+                                %
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-base sm:text-2xl font-black text-white">
+                            {selectedList.budget_limit > 0
+                              ? formatCurrency(selectedList.budget_limit)
+                              : 'Sem limite'}
+                          </p>
+                          {selectedList.budget_limit > 0 && (
+                            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                              <div
+                                className={`h-full transition-all ${
+                                  selectedList.cart_total > selectedList.budget_limit
+                                    ? 'bg-rose-500'
+                                    : selectedList.cart_total >= selectedList.budget_limit * 0.85
+                                      ? 'bg-amber-400'
+                                      : 'bg-emerald-500'
+                                }`}
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    Math.round(
+                                      (selectedList.cart_total / selectedList.budget_limit) * 100
+                                    )
+                                  )}%`,
+                                }}
+                              />
+                            </div>
                           )}
                         </div>
-                        <p className="mt-1 text-2xl font-black text-white">
-                          {selectedList.budget_limit > 0
-                            ? formatCurrency(selectedList.budget_limit)
-                            : 'Sem teto definido'}
-                        </p>
-                        {selectedList.budget_limit > 0 ? (
-                          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-800">
-                            <div
-                              className={`h-full transition-all ${
-                                selectedList.cart_total > selectedList.budget_limit
-                                  ? 'bg-rose-500'
-                                  : selectedList.cart_total >= selectedList.budget_limit * 0.85
-                                    ? 'bg-amber-400'
-                                    : 'bg-emerald-500'
-                              }`}
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  Math.round((selectedList.cart_total / selectedList.budget_limit) * 100)
-                                )}%`,
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-500">
-                            Defina uma meta ao criar a lista para evitar passar do orçamento.
-                          </span>
-                        )}
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* FORMULÁRIO DE ADIÇÃO RÁPIDA + BOTÃO CATÁLOGO DE 1 TOQUE */}
-                  {selectedList.status === 'OPEN' && (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5 space-y-4">
+                  {/* FORMULÁRIO DESKTOP + BOTÃO CATÁLOGO RÁPIDO */}
+                  {selectedList.status === 'OPEN' && !inStoreFocusMode && (
+                    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5 space-y-3.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
                           <PackagePlus className="h-4 w-4 text-emerald-400" />
                           Adicionar Item à Lista
                         </h3>
@@ -890,18 +973,18 @@ export default function SupermarketModule({
                         >
                           <Sparkles className="h-3.5 w-3.5" />
                           {showQuickCatalog
-                            ? 'Ocultar Catálogo Rápido'
-                            : 'Abrir Catálogo Rápido (+50 Itens de Despensa)'}
+                            ? 'Fechar Catálogo Rápido'
+                            : 'Catálogo Rápido (+50 Itens)'}
                         </button>
                       </div>
 
-                      <form onSubmit={handleAddItem} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                      <form onSubmit={handleAddItem} className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                         <input
                           type="text"
                           required
                           value={itemName}
                           onChange={e => setItemName(e.target.value)}
-                          placeholder="Ex.: Arroz 5kg, Leite Integral, Sabão Líquido..."
+                          placeholder="Ex.: Arroz 5kg, Leite, Café..."
                           className="sm:col-span-4 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
                         />
                         <select
@@ -915,15 +998,16 @@ export default function SupermarketModule({
                             </option>
                           ))}
                         </select>
-                        <div className="sm:col-span-2 flex gap-1.5">
+                        <div className="grid grid-cols-3 sm:col-span-4 gap-2">
                           <input
                             type="number"
+                            inputMode="decimal"
                             step="0.01"
                             min="0.01"
                             value={itemQty}
                             onChange={e => setItemQty(e.target.value)}
                             placeholder="Qtd"
-                            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                            className="rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
                           />
                           <select
                             value={itemUnit}
@@ -936,16 +1020,17 @@ export default function SupermarketModule({
                             <option value="cx">cx</option>
                             <option value="L">L</option>
                           </select>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min="0"
+                            value={itemPrice}
+                            onChange={e => setItemPrice(e.target.value)}
+                            placeholder="R$"
+                            className="rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                          />
                         </div>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={itemPrice}
-                          onChange={e => setItemPrice(e.target.value)}
-                          placeholder="Preço R$ (opcional)"
-                          className="sm:col-span-2 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
-                        />
                         <button
                           type="submit"
                           disabled={addingItem}
@@ -955,21 +1040,18 @@ export default function SupermarketModule({
                         </button>
                       </form>
 
-                      {/* CATÁLOGO RÁPIDO DE 1 CLIQUE */}
                       {showQuickCatalog && (
-                        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                              Toque nos itens que acabaram em casa para adicionar à lista:
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
+                        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3.5 space-y-3">
+                          <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 block">
+                            Toque nos itens para adicionar em 1 segundo:
+                          </span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                             {AISLE_CATEGORIES.map(aisle => (
                               <button
                                 key={aisle}
                                 type="button"
                                 onClick={() => setCatalogAisle(aisle)}
-                                className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                                className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
                                   catalogAisle === aisle
                                     ? 'bg-emerald-500 text-slate-950'
                                     : 'bg-slate-900 text-slate-300 border border-slate-800'
@@ -990,13 +1072,17 @@ export default function SupermarketModule({
                                   type="button"
                                   disabled={alreadyInList}
                                   onClick={() => handleQuickAddFromCatalog(catItem)}
-                                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+                                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
                                     alreadyInList
                                       ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 opacity-60 cursor-default'
-                                      : 'border-slate-800 bg-slate-900 text-slate-200 hover:border-emerald-500/40 hover:text-white cursor-pointer'
+                                      : 'border-slate-800 bg-slate-900 text-slate-200 hover:border-emerald-500/40 active:scale-95 cursor-pointer'
                                   }`}
                                 >
-                                  {alreadyInList ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5 text-emerald-400" />}
+                                  {alreadyInList ? (
+                                    <Check className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                                  )}
                                   {catItem.name}
                                 </button>
                               );
@@ -1007,21 +1093,65 @@ export default function SupermarketModule({
                     </div>
                   )}
 
-                  {/* BARRA DE FILTRO DA LISTA (TODOS / FALTA PEGAR / NO CARRINHO) */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
+                  {/* PÍLULAS HORIZONTAIS DE CORREDOR (PARA NAVEGAR COM O POLEGAR NO MERCADO) */}
+                  {availableAislesInList.length > 1 && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAisleFilter('ALL')}
+                        className={`shrink-0 rounded-xl px-3.5 py-2 text-xs font-extrabold transition-all cursor-pointer ${
+                          selectedAisleFilter === 'ALL'
+                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                            : 'bg-slate-900 text-slate-300 border border-slate-800'
+                        }`}
+                      >
+                        🛒 Todos os Corredores ({selectedList.total_items})
+                      </button>
+                      {availableAislesInList.map(a => (
+                        <button
+                          key={a.aisle}
+                          type="button"
+                          onClick={() => setSelectedAisleFilter(a.aisle)}
+                          className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold transition-all cursor-pointer ${
+                            selectedAisleFilter === a.aisle
+                              ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                              : 'bg-slate-900 text-slate-300 border border-slate-800'
+                          }`}
+                        >
+                          <span>{a.icon}</span>
+                          <span>{a.aisle}</span>
+                          <span
+                            className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                              selectedAisleFilter === a.aisle
+                                ? 'bg-slate-950/20 text-slate-950'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {a.pending > 0 ? `Falta ${a.pending}` : '✓'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* BARRA DE FILTRO RÁPIDO (TODOS / FALTA PEGAR / NO CARRINHO) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="grid grid-cols-3 sm:flex items-center gap-1.5">
                       {(
                         [
                           ['ALL', `Todos (${selectedList.total_items})`],
-                          ['PENDING', `Falta Pegar (${selectedList.total_items - selectedList.checked_items})`],
-                          ['CART', `No Carrinho (${selectedList.checked_items})`],
+                          [
+                            'PENDING',
+                            `Falta (${selectedList.total_items - selectedList.checked_items})`,
+                          ],
+                          ['CART', `Carrinho (${selectedList.checked_items})`],
                         ] as const
                       ).map(([mode, label]) => (
                         <button
                           key={mode}
                           type="button"
                           onClick={() => setFilterMode(mode)}
-                          className={`rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
+                          className={`rounded-xl px-3 py-2 text-xs font-bold text-center transition-all cursor-pointer ${
                             filterMode === mode
                               ? 'bg-emerald-500 text-slate-950'
                               : 'bg-slate-900 text-slate-300 border border-slate-800'
@@ -1038,13 +1168,13 @@ export default function SupermarketModule({
                         type="text"
                         value={searchItem}
                         onChange={e => setSearchItem(e.target.value)}
-                        placeholder="Filtrar item na lista..."
+                        placeholder="Buscar item na lista..."
                         className="w-full rounded-xl border border-slate-800 bg-slate-900 pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-emerald-500"
                       />
                     </div>
                   </div>
 
-                  {/* LISTA AGRUPADA POR CORREDOR DO SUPERMERCADO */}
+                  {/* LISTA DE ITENS OTIMIZADA PARA POLEGAR (TOUCH TARGETS AMPLOS + STEPPER +/-) */}
                   <div className="space-y-4">
                     {groupedItems.map(([aisle, items]) => {
                       const aisleTotal = items.reduce(
@@ -1056,7 +1186,7 @@ export default function SupermarketModule({
                           key={aisle}
                           className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900"
                         >
-                          <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/60 px-4 py-3">
+                          <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/60 px-4 py-2.5">
                             <div className="flex items-center gap-2">
                               <span className="text-base">{AISLE_ICONS[aisle] || '🛒'}</span>
                               <h4 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
@@ -1067,13 +1197,14 @@ export default function SupermarketModule({
                               </span>
                             </div>
                             <span className="text-xs font-bold text-emerald-400">
-                              Subtotal: {formatCurrency(aisleTotal)}
+                              {formatCurrency(aisleTotal)}
                             </span>
                           </div>
 
                           <div className="divide-y divide-slate-800/70">
                             {items.map(item => {
-                              const lineTotal = Number(item.quantity || 0) * Number(item.unit_price || 0);
+                              const lineTotal =
+                                Number(item.quantity || 0) * Number(item.unit_price || 0);
                               const priceDiff =
                                 item.last_paid_price && item.unit_price > 0
                                   ? item.unit_price - item.last_paid_price
@@ -1082,113 +1213,154 @@ export default function SupermarketModule({
                               return (
                                 <div
                                   key={item.id}
-                                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 transition-colors ${
-                                    item.is_checked ? 'bg-emerald-950/15' : 'hover:bg-slate-800/30'
+                                  className={`p-3.5 sm:px-4 sm:py-3 transition-colors ${
+                                    item.is_checked ? 'bg-emerald-950/20' : 'hover:bg-slate-800/30'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleUpdateItem(item, { is_checked: !item.is_checked })
-                                      }
-                                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition-all cursor-pointer ${
-                                        item.is_checked
-                                          ? 'border-emerald-500 bg-emerald-500 text-slate-950'
-                                          : 'border-slate-600 bg-slate-950 text-transparent hover:border-emerald-400'
-                                      }`}
-                                      aria-label={`Marcar ${item.name} no carrinho`}
-                                    >
-                                      <Check className="h-4 w-4" strokeWidth={3} />
-                                    </button>
-
-                                    <div className="min-w-0">
-                                      <p
-                                        className={`text-sm font-bold truncate ${
+                                  {/* LINHA SUPERIOR DO CARD: CHECKBOX GRANDE + NOME + SUBTOTAL + LIXEIRA */}
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleUpdateItem(item, { is_checked: !item.is_checked })
+                                        }
+                                        className={`mt-0.5 flex h-8 w-8 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded-xl sm:rounded-lg border-2 transition-all active:scale-90 cursor-pointer ${
                                           item.is_checked
-                                            ? 'line-through text-slate-400'
-                                            : 'text-white'
+                                            ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm'
+                                            : 'border-slate-600 bg-slate-950 text-transparent hover:border-emerald-400'
                                         }`}
+                                        aria-label={`Marcar ${item.name} no carrinho`}
                                       >
-                                        {item.name}
-                                      </p>
-                                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                                        {item.last_paid_price !== null && item.last_paid_price > 0 && (
-                                          <span className="text-[11px] text-slate-400">
-                                            Último pago: <strong>{formatCurrency(item.last_paid_price)}</strong>/{item.unit}
-                                          </span>
-                                        )}
-                                        {priceDiff !== null && Math.abs(priceDiff) >= 0.05 && (
-                                          <span
-                                            className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold ${
-                                              priceDiff > 0
-                                                ? 'bg-rose-500/15 text-rose-300'
-                                                : 'bg-emerald-500/15 text-emerald-300'
-                                            }`}
-                                          >
-                                            {priceDiff > 0 ? (
-                                              <>
-                                                <TrendingUp className="h-3 w-3" /> +{formatCurrency(priceDiff)}
-                                              </>
-                                            ) : (
-                                              <>
-                                                <TrendingDown className="h-3 w-3" /> {formatCurrency(priceDiff)}
-                                              </>
+                                        <Check className="h-5 w-5 sm:h-4 sm:w-4" strokeWidth={3} />
+                                      </button>
+
+                                      <div className="min-w-0 flex-1">
+                                        <p
+                                          onClick={() =>
+                                            handleUpdateItem(item, { is_checked: !item.is_checked })
+                                          }
+                                          className={`text-sm sm:text-base font-extrabold leading-snug cursor-pointer ${
+                                            item.is_checked
+                                              ? 'line-through text-slate-400'
+                                              : 'text-white'
+                                          }`}
+                                        >
+                                          {item.name}
+                                        </p>
+
+                                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                          {item.last_paid_price !== null &&
+                                            item.last_paid_price > 0 && (
+                                              <span className="text-[11px] text-slate-400">
+                                                Último:{' '}
+                                                <strong className="text-slate-300">
+                                                  {formatCurrency(item.last_paid_price)}
+                                                </strong>
+                                                /{item.unit}
+                                              </span>
                                             )}
-                                          </span>
-                                        )}
+                                          {priceDiff !== null && Math.abs(priceDiff) >= 0.05 && (
+                                            <span
+                                              className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold ${
+                                                priceDiff > 0
+                                                  ? 'bg-rose-500/15 text-rose-300'
+                                                  : 'bg-emerald-500/15 text-emerald-300'
+                                              }`}
+                                            >
+                                              {priceDiff > 0 ? (
+                                                <>
+                                                  <TrendingUp className="h-3 w-3" /> +
+                                                  {formatCurrency(priceDiff)}
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <TrendingDown className="h-3 w-3" />{' '}
+                                                  {formatCurrency(priceDiff)}
+                                                </>
+                                              )}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <div className="text-right">
+                                        <span className="block text-xs sm:text-sm font-black text-emerald-400">
+                                          {formatCurrency(lineTotal)}
+                                        </span>
+                                        <span className="block text-[10px] text-slate-500">
+                                          subtotal
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteItem(item.id)}
+                                        className="p-2 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                        title="Remover item"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
                                     </div>
                                   </div>
 
-                                  <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 pl-9 sm:pl-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[11px] text-slate-400">Qtd ({item.unit}):</span>
-                                      <input
-                                        type="number"
-                                        step="0.1"
-                                        min="0.1"
-                                        value={item.quantity}
-                                        onChange={e =>
-                                          handleUpdateItem(item, {
-                                            quantity: Math.max(0.01, Number(e.target.value) || 1),
-                                          })
-                                        }
-                                        className="w-16 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-bold text-white text-center outline-none focus:border-emerald-500"
-                                      />
+                                  {/* LINHA INFERIOR MOBILE-FIRST: BOTÕES [- QTD +] E CAMPO DE PREÇO UNITÁRIO */}
+                                  <div className="mt-3 flex items-center justify-between gap-2 pl-11 sm:pl-9">
+                                    {/* Stepper de Quantidade para 1 Mão */}
+                                    <div className="inline-flex items-center rounded-xl border border-slate-700 bg-slate-950 p-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStepQuantity(item, -1)}
+                                        aria-label="Diminuir quantidade"
+                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800 active:scale-90 cursor-pointer"
+                                      >
+                                        <Minus className="h-3.5 w-3.5" />
+                                      </button>
+                                      <div className="px-2 text-center min-w-[54px]">
+                                        <span className="text-xs font-extrabold text-white">
+                                          {item.quantity}
+                                        </span>
+                                        <span className="ml-1 text-[10px] font-semibold text-slate-400">
+                                          {item.unit}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStepQuantity(item, 1)}
+                                        aria-label="Aumentar quantidade"
+                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-emerald-400 hover:bg-slate-800 active:scale-90 cursor-pointer"
+                                      >
+                                        <Plus className="h-3.5 w-3.5" />
+                                      </button>
                                     </div>
 
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[11px] text-slate-400">Preço R$:</span>
+                                    {/* Input de Preço com Teclado Decimal Nativo + Auto-Check */}
+                                    <div className="flex items-center gap-1.5 flex-1 max-w-[175px]">
+                                      <span className="text-xs font-bold text-slate-400">R$</span>
                                       <input
                                         type="number"
+                                        inputMode="decimal"
                                         step="0.01"
                                         min="0"
                                         value={item.unit_price || ''}
-                                        placeholder="0,00"
-                                        onChange={e =>
+                                        placeholder="Preço un."
+                                        onChange={e => {
+                                          const nextPrice = Math.max(
+                                            0,
+                                            Number(e.target.value) || 0
+                                          );
                                           handleUpdateItem(item, {
-                                            unit_price: Math.max(0, Number(e.target.value) || 0),
-                                          })
-                                        }
-                                        className="w-24 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-bold text-emerald-300 text-right outline-none focus:border-emerald-500"
+                                            unit_price: nextPrice,
+                                            // Se o usuário digitou o preço na prateleira, já marca no carrinho automaticamente!
+                                            ...(nextPrice > 0 && !item.is_checked
+                                              ? { is_checked: true }
+                                              : {}),
+                                          });
+                                        }}
+                                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs sm:text-sm font-extrabold text-emerald-300 text-right outline-none focus:border-emerald-500"
                                       />
                                     </div>
-
-                                    <div className="min-w-[85px] text-right">
-                                      <span className="text-xs font-extrabold text-white">
-                                        {formatCurrency(lineTotal)}
-                                      </span>
-                                    </div>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteItem(item.id)}
-                                      className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-                                      title="Remover item"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
                                   </div>
                                 </div>
                               );
@@ -1205,26 +1377,147 @@ export default function SupermarketModule({
         </>
       )}
 
-      {/* ==================== ABA 2: COMPARADOR & INFLAÇÃO DA CASA ==================== */}
+      {/* ==================== BARRA FLUTUANTE FIXA NO RODAPÉ DO CELULAR (STICKY MOBILE CART BAR) ==================== */}
+      {selectedList &&
+        selectedList.status === 'OPEN' &&
+        activeSubMenu !== 'historico_precos' &&
+        activeSubMenu !== 'analise_mercado' && (
+          <div className="fixed inset-x-0 bottom-0 z-40 md:hidden border-t border-emerald-500/30 bg-slate-950/95 px-4 pt-2.5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(0,0,0,0.65)] backdrop-blur-md">
+            {selectedList.budget_limit > 0 && (
+              <div className="mb-2 flex items-center gap-2">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className={`h-full transition-all ${
+                      selectedList.cart_total > selectedList.budget_limit
+                        ? 'bg-rose-500'
+                        : selectedList.cart_total >= selectedList.budget_limit * 0.85
+                          ? 'bg-amber-400'
+                          : 'bg-emerald-500'
+                    }`}
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round((selectedList.cart_total / selectedList.budget_limit) * 100)
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-[10px] font-bold text-slate-400">
+                  Meta {formatCurrency(selectedList.budget_limit)}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+                  🛒 Carrinho ({selectedList.checked_items}/{selectedList.total_items})
+                </span>
+                <p className="text-lg font-black text-white leading-tight">
+                  {formatCurrency(selectedList.cart_total)}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileAddSheetOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-xs font-extrabold text-slate-200 active:scale-95"
+                >
+                  <Plus className="h-4 w-4 text-emerald-400" />
+                  Item
+                </button>
+                <button
+                  type="button"
+                  onClick={openCheckoutModal}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 shadow-lg active:scale-95"
+                >
+                  <Receipt className="h-4 w-4" />
+                  Finalizar Compra
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* ==================== BOTTOM SHEET MOBILE: ADICIONAR ITEM RÁPIDO NO CORREDOR ==================== */}
+      {isMobileAddSheetOpen && selectedList && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border-t sm:border border-slate-800 bg-slate-900 p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-white">Adicionar Item no Corredor</h3>
+              <button
+                type="button"
+                onClick={() => setIsMobileAddSheetOpen(false)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddItem} className="space-y-3">
+              <input
+                type="text"
+                required
+                autoFocus
+                value={itemName}
+                onChange={e => setItemName(e.target.value)}
+                placeholder="Nome do produto (ex.: Café 500g)"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-emerald-500"
+              />
+              <div className="grid grid-cols-2 gap-2.5">
+                <select
+                  value={itemAisle}
+                  onChange={e => setItemAisle(e.target.value)}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-xs font-bold text-white"
+                >
+                  {AISLE_CATEGORIES.map(aisle => (
+                    <option key={aisle} value={aisle}>
+                      {AISLE_ICONS[aisle]} {aisle}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={itemPrice}
+                  onChange={e => setItemPrice(e.target.value)}
+                  placeholder="Preço R$ (opcional)"
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={addingItem}
+                className="w-full rounded-xl bg-emerald-500 py-3 text-sm font-extrabold text-slate-950"
+              >
+                {addingItem ? 'Adicionando...' : 'Adicionar à Lista'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== ABA 2: COMPARADOR & INFLAÇÃO DA CASA (CARDS NO MOBILE / TABELA NO DESKTOP) ==================== */}
       {activeSubMenu === 'historico_precos' && (
         <section className="space-y-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
             <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
               <Tag className="h-5 w-5 text-emerald-400" />
               Memória de Preços & Inflação da Casa
             </h2>
             <p className="mt-1 text-xs sm:text-sm text-slate-400">
-              Toda vez que você finaliza uma compra no mercado, o FinanFamily grava automaticamente o preço pago em cada item para você nunca mais cair em falsas promoções.
+              Consulte no corredor do mercado quanto você pagou na última vez para saber se a promoção vale a pena.
             </p>
 
-            <div className="mt-4 flex flex-col sm:flex-row gap-3">
+            <div className="mt-4 flex flex-col sm:flex-row gap-2.5">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
                   value={historySearch}
                   onChange={e => setHistorySearch(e.target.value)}
-                  placeholder="Buscar produto ou mercado (ex.: Arroz, Café, Atacadão)..."
+                  placeholder="Buscar produto ou mercado (ex.: Arroz, Café)..."
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 pl-10 pr-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
                 />
               </div>
@@ -1248,67 +1541,125 @@ export default function SupermarketModule({
               Assim que você concluir sua primeira lista de compras com preços informados, o histórico de preços da sua família aparecerá aqui automaticamente.
             </div>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs sm:text-sm">
-                  <thead className="border-b border-slate-800 bg-slate-950/70 text-[11px] font-bold uppercase text-slate-400">
-                    <tr>
-                      <th className="px-4 py-3.5">Produto</th>
-                      <th className="px-4 py-3.5">Corredor</th>
-                      <th className="px-4 py-3.5">Último Preço</th>
-                      <th className="px-4 py-3.5">Variação</th>
-                      <th className="px-4 py-3.5">Menor / Maior Pago</th>
-                      <th className="px-4 py-3.5">Último Mercado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {filteredPriceHistory.map(row => {
-                      const diff =
-                        row.previous_price !== null ? row.last_price - row.previous_price : null;
-                      return (
-                        <tr key={row.id} className="hover:bg-slate-800/40">
-                          <td className="px-4 py-3 font-bold text-white">
+            <>
+              {/* CARDS VERTICAIS EXCLUSIVOS PARA CELULAR (SEM SCROLL HORIZONTAL) */}
+              <div className="grid grid-cols-1 gap-3 md:hidden">
+                {filteredPriceHistory.map(row => {
+                  const diff =
+                    row.previous_price !== null ? row.last_price - row.previous_price : null;
+                  return (
+                    <div
+                      key={row.id}
+                      className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            {AISLE_ICONS[row.aisle_category] || '🛒'} {row.aisle_category}
+                          </span>
+                          <h3 className="text-sm font-extrabold text-white">
                             {row.display_name}{' '}
                             <span className="text-xs font-normal text-slate-400">({row.unit})</span>
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            {AISLE_ICONS[row.aisle_category] || '🛒'} {row.aisle_category}
-                          </td>
-                          <td className="px-4 py-3 font-extrabold text-emerald-400">
+                          </h3>
+                        </div>
+                        <div className="text-right">
+                          <span className="block text-base font-black text-emerald-400">
                             {formatCurrency(row.last_price)}
-                          </td>
-                          <td className="px-4 py-3">
-                            {diff === null || Math.abs(diff) < 0.01 ? (
-                              <span className="text-slate-500">Estável</span>
-                            ) : diff > 0 ? (
-                              <span className="inline-flex items-center gap-1 text-rose-400 font-bold">
-                                <TrendingUp className="h-3.5 w-3.5" /> +{formatCurrency(diff)}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
-                                <TrendingDown className="h-3.5 w-3.5" /> {formatCurrency(diff)}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            <span className="text-emerald-300 font-semibold">
-                              {formatCurrency(row.min_price)}
-                            </span>{' '}
-                            /{' '}
-                            <span className="text-rose-300 font-semibold">
-                              {formatCurrency(row.max_price)}
+                          </span>
+                          {diff !== null && Math.abs(diff) >= 0.01 && (
+                            <span
+                              className={`inline-flex items-center gap-0.5 text-[11px] font-bold ${
+                                diff > 0 ? 'text-rose-400' : 'text-emerald-400'
+                              }`}
+                            >
+                              {diff > 0 ? `+${formatCurrency(diff)}` : formatCurrency(diff)}
                             </span>
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            {row.last_store || 'Não informado'} ({row.purchase_count}x)
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 text-xs text-slate-400">
+                        <span>
+                          Min:{' '}
+                          <strong className="text-emerald-300">
+                            {formatCurrency(row.min_price)}
+                          </strong>{' '}
+                          • Máx:{' '}
+                          <strong className="text-rose-300">{formatCurrency(row.max_price)}</strong>
+                        </span>
+                        <span>
+                          {row.last_store || 'Mercado'} ({row.purchase_count}x)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+
+              {/* TABELA COMPLETA NO DESKTOP */}
+              <div className="hidden md:block overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-slate-800 bg-slate-950/70 text-[11px] font-bold uppercase text-slate-400">
+                      <tr>
+                        <th className="px-4 py-3.5">Produto</th>
+                        <th className="px-4 py-3.5">Corredor</th>
+                        <th className="px-4 py-3.5">Último Preço</th>
+                        <th className="px-4 py-3.5">Variação</th>
+                        <th className="px-4 py-3.5">Menor / Maior Pago</th>
+                        <th className="px-4 py-3.5">Último Mercado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {filteredPriceHistory.map(row => {
+                        const diff =
+                          row.previous_price !== null ? row.last_price - row.previous_price : null;
+                        return (
+                          <tr key={row.id} className="hover:bg-slate-800/40">
+                            <td className="px-4 py-3 font-bold text-white">
+                              {row.display_name}{' '}
+                              <span className="text-xs font-normal text-slate-400">
+                                ({row.unit})
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-300">
+                              {AISLE_ICONS[row.aisle_category] || '🛒'} {row.aisle_category}
+                            </td>
+                            <td className="px-4 py-3 font-extrabold text-emerald-400">
+                              {formatCurrency(row.last_price)}
+                            </td>
+                            <td className="px-4 py-3">
+                              {diff === null || Math.abs(diff) < 0.01 ? (
+                                <span className="text-slate-500">Estável</span>
+                              ) : diff > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-rose-400 font-bold">
+                                  <TrendingUp className="h-3.5 w-3.5" /> +{formatCurrency(diff)}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                                  <TrendingDown className="h-3.5 w-3.5" /> {formatCurrency(diff)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-slate-300">
+                              <span className="text-emerald-300 font-semibold">
+                                {formatCurrency(row.min_price)}
+                              </span>{' '}
+                              /{' '}
+                              <span className="text-rose-300 font-semibold">
+                                {formatCurrency(row.max_price)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-300">
+                              {row.last_store || 'Não informado'} ({row.purchase_count}x)
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
           )}
         </section>
       )}
@@ -1331,11 +1682,11 @@ export default function SupermarketModule({
               Preencha os preços nos itens da sua lista para visualizar a distribuição de gastos por corredor do supermercado.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {aisleAnalytics.map(row => (
                 <div
                   key={row.aisle}
-                  className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-2.5"
+                  className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5 space-y-2.5"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
@@ -1365,10 +1716,10 @@ export default function SupermarketModule({
         </section>
       )}
 
-      {/* ==================== MODAL: NOVA LISTA DE COMPRAS ==================== */}
+      {/* ==================== MODAL (BOTTOM SHEET NO CELULAR): NOVA LISTA DE COMPRAS ==================== */}
       {isNewListModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 sm:p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border-t sm:border border-slate-800 bg-slate-900 p-5 sm:p-6 shadow-2xl space-y-5 max-h-[92dvh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-extrabold text-white">Nova Lista de Compras</h3>
               <button
@@ -1388,22 +1739,22 @@ export default function SupermarketModule({
                   required
                   value={newListName}
                   onChange={e => setNewListName(e.target.value)}
-                  placeholder="Ex.: Compra do Mês - Outubro, Feira da Semana..."
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                  placeholder="Ex.: Compra do Mês, Feira da Semana..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-emerald-500"
                 />
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="block space-y-1.5">
                   <span className="text-xs font-semibold text-slate-300">
-                    Supermercado / Atacarejo (opcional)
+                    Supermercado (opcional)
                   </span>
                   <input
                     type="text"
                     value={newListStore}
                     onChange={e => setNewListStore(e.target.value)}
                     placeholder="Ex.: Atacadão, Assaí, Condor..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-emerald-500"
                   />
                 </label>
 
@@ -1413,12 +1764,13 @@ export default function SupermarketModule({
                   </span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     value={newListBudget}
                     onChange={e => setNewListBudget(e.target.value)}
                     placeholder="Ex.: 650.00"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-emerald-500"
                   />
                 </label>
               </div>
@@ -1430,7 +1782,7 @@ export default function SupermarketModule({
                 <select
                   value={newListTemplate}
                   onChange={e => setNewListTemplate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-emerald-500"
                 >
                   <option value="">Lista em branco (adicionar itens manualmente)</option>
                   <option value="COMPRA_MES">🛒 Compra Base do Mês (25 itens essenciais)</option>
@@ -1444,14 +1796,14 @@ export default function SupermarketModule({
                 <button
                   type="button"
                   onClick={() => setIsNewListModalOpen(false)}
-                  className="rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                  className="rounded-xl border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-slate-800"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={creatingList}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-2.5 text-xs font-extrabold text-slate-950 cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-3 text-xs font-extrabold text-slate-950 cursor-pointer"
                 >
                   {creatingList ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   Criar Lista
@@ -1462,10 +1814,10 @@ export default function SupermarketModule({
         </div>
       )}
 
-      {/* ==================== MODAL: FINALIZAR COMPRA & LANÇAR NO FINANCEIRO ==================== */}
+      {/* ==================== MODAL (BOTTOM SHEET NO CELULAR): FINALIZAR COMPRA & LANÇAR NO FINANCEIRO ==================== */}
       {isCheckoutOpen && selectedList && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 sm:p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border-t sm:border border-slate-800 bg-slate-900 p-5 sm:p-6 shadow-2xl space-y-5 max-h-[92dvh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
@@ -1496,7 +1848,7 @@ export default function SupermarketModule({
                     value={checkoutStore}
                     onChange={e => setCheckoutStore(e.target.value)}
                     placeholder="Ex.: Atacadão, Condor..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-emerald-500"
                   />
                 </label>
 
@@ -1504,17 +1856,18 @@ export default function SupermarketModule({
                   <span className="text-xs font-semibold text-slate-300">Valor Total da Nota (R$)</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0.01"
                     required
                     value={checkoutTotalOverride}
                     onChange={e => setCheckoutTotalOverride(e.target.value)}
-                    className="w-full rounded-xl border border-emerald-500/40 bg-slate-950 px-3.5 py-2.5 text-sm font-extrabold text-emerald-300 outline-none focus:border-emerald-500"
+                    className="w-full rounded-xl border border-emerald-500/40 bg-slate-950 px-3.5 py-3 text-sm font-extrabold text-emerald-300 outline-none focus:border-emerald-500"
                   />
                 </label>
               </div>
 
-              <label className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950 p-3 cursor-pointer">
+              <label className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950 p-3.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={checkoutCreateTx}
@@ -1532,7 +1885,7 @@ export default function SupermarketModule({
                     <button
                       type="button"
                       onClick={() => setCheckoutTarget('ACCOUNT')}
-                      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-extrabold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-xs font-extrabold transition-all cursor-pointer ${
                         checkoutTarget === 'ACCOUNT'
                           ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
                           : 'border-slate-800 bg-slate-900 text-slate-400'
@@ -1543,7 +1896,7 @@ export default function SupermarketModule({
                     <button
                       type="button"
                       onClick={() => setCheckoutTarget('CARD')}
-                      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-extrabold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-xs font-extrabold transition-all cursor-pointer ${
                         checkoutTarget === 'CARD'
                           ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
                           : 'border-slate-800 bg-slate-900 text-slate-400'
@@ -1560,7 +1913,7 @@ export default function SupermarketModule({
                         <select
                           value={checkoutAccountId}
                           onChange={e => setCheckoutAccountId(e.target.value)}
-                          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs sm:text-sm text-white"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-xs sm:text-sm text-white"
                         >
                           {accounts.map(acc => (
                             <option key={acc.id} value={acc.id}>
@@ -1585,7 +1938,7 @@ export default function SupermarketModule({
                       <select
                         value={checkoutCardId}
                         onChange={e => setCheckoutCardId(e.target.value)}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs sm:text-sm text-white"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-xs sm:text-sm text-white"
                       >
                         {creditCards.map(card => (
                           <option key={card.id} value={card.id}>
@@ -1602,14 +1955,14 @@ export default function SupermarketModule({
                 <button
                   type="button"
                   onClick={() => setIsCheckoutOpen(false)}
-                  className="rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                  className="rounded-xl border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-slate-800"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submittingCheckout}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-2.5 text-xs font-extrabold text-slate-950 cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-3 text-xs font-extrabold text-slate-950 cursor-pointer"
                 >
                   {submittingCheckout ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

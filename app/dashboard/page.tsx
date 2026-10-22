@@ -1478,7 +1478,7 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {canCreateTransactions && (
+      {canCreateTransactions && activeModule !== 'mercado' && activeModule !== 'gestao' && (
         <button
           type="button"
           onClick={() => {
