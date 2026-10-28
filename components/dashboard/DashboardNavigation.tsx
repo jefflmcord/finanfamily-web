@@ -28,6 +28,9 @@ import {
   ShoppingCart,
   Tag,
   PieChart,
+  FileCheck2,
+  ShieldCheck,
+  CalendarClock,
 } from 'lucide-react';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
@@ -156,7 +159,7 @@ export function DashboardHeader({
                 setActiveModule('mercado');
                 setActiveSubMenu('listas');
               }}
-              className={`px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 cursor-pointer ${
+              className={`px-4 lg:px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 cursor-pointer ${
                 activeModule === 'mercado'
                   ? 'bg-emerald-500 text-slate-950 shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -164,6 +167,20 @@ export function DashboardHeader({
             >
               <ShoppingCart className="w-4 h-4" />
               Mercado
+            </button>
+            <button
+              onClick={() => {
+                setActiveModule('contratos');
+                setActiveSubMenu('assinaturas');
+              }}
+              className={`px-4 lg:px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 cursor-pointer ${
+                activeModule === 'contratos'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <FileCheck2 className="w-4 h-4" />
+              Contratos & Garantias
             </button>
           </>
         )}
@@ -733,12 +750,24 @@ export function DashboardSidebar({
               setActiveModule('mercado');
               setActiveSubMenu('listas');
             }}
-            className={`col-span-2 rounded-xl px-3 py-2.5 text-xs font-bold ${
+            className={`rounded-xl px-3 py-2.5 text-xs font-bold ${
               activeModule === 'mercado' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-300'
             }`}
           >
             <ShoppingCart className="w-4 h-4 inline mr-1.5" />
-            Mercado & Compras
+            Mercado
+          </button>
+          <button
+            onClick={() => {
+              setActiveModule('contratos');
+              setActiveSubMenu('assinaturas');
+            }}
+            className={`rounded-xl px-3 py-2.5 text-xs font-bold ${
+              activeModule === 'contratos' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-300'
+            }`}
+          >
+            <FileCheck2 className="w-4 h-4 inline mr-1.5" />
+            Contratos
           </button>
           {isInternalAdmin && (
             <button
@@ -918,6 +947,49 @@ export function DashboardSidebar({
               }`}
             >
               <PieChart className="w-5 h-5" /> Raio-X por Corredor
+            </button>
+          </>
+        )}
+        {activeModule === 'contratos' && canReadFamily && (
+          <>
+            <button
+              onClick={() => {
+                setActiveSubMenu('assinaturas');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'assinaturas'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <CalendarClock className="w-5 h-5" /> Assinaturas & Contratos
+            </button>
+            <button
+              onClick={() => {
+                setActiveSubMenu('garantias');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'garantias'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ShieldCheck className="w-5 h-5" /> Cofre de Garantias
+            </button>
+            <button
+              onClick={() => {
+                setActiveSubMenu('analise_contratos');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'analise_contratos'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <PieChart className="w-5 h-5" /> Raio-X do Custo Fixo
             </button>
           </>
         )}
