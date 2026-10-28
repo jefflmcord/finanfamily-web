@@ -34,11 +34,15 @@ import {
   BookOpen,
   Download,
   Loader2,
+  ShoppingCart,
+  FileCheck2,
+  Upload,
+  Smartphone,
 } from 'lucide-react';
 import { API_URL } from '@/lib/apiClient';
 import { generateFinanFamilyEbookPdf } from '@/lib/ebookGenerator';
 
-type HeroPreviewTab = 'overview' | 'kanban' | 'cards' | 'family';
+type HeroPreviewTab = 'overview' | 'kanban' | 'cards' | 'market' | 'contracts' | 'family';
 type InterfaceTheme = 'dark' | 'light';
 
 const getInterfaceTheme = (): InterfaceTheme =>
@@ -58,22 +62,27 @@ const FAQ_ITEMS = [
   {
     question: 'Como funcionam os 10 dias grátis e os planos de assinatura?',
     answer:
-      'Ao criar sua conta, sua família ganha 10 dias de teste grátis com acesso liberado a 100% das funcionalidades. Após o período de avaliação, você pode escolher entre o Plano Mensal por R$ 29,90/mês ou o Plano Anual por R$ 298,80/ano (que equivale a apenas R$ 24,90/mês e pode ser parcelado em até 12x no cartão de crédito).',
+      'Ao criar sua conta, sua família ganha 10 dias de teste grátis com acesso liberado a 100% das funcionalidades (Financeiro, Mercado & Compras, Contratos & Garantias e Importador Inteligente). Após o período de avaliação, você pode escolher entre o Plano Mensal por R$ 29,90/mês ou o Plano Anual por R$ 298,80/ano (que equivale a apenas R$ 24,90/mês em até 12x no cartão).',
+  },
+  {
+    question: 'Como funciona o Módulo de Supermercado pelo celular?',
+    answer:
+      'Você monta a lista de compras em casa (ou usa nossos modelos prontos de Compra do Mês, Feira, Limpeza e Churrasco) e, no mercado, ativa o "Modo 1 Mão" no celular. Conforme coloca os itens no carrinho, o sistema soma o total em tempo real, avisa se o preço subiu em relação à última compra e, ao finalizar no caixa, lança a despesa automaticamente no seu orçamento.',
+  },
+  {
+    question: 'O que é o Módulo de Contratos, Assinaturas e Cofre de Garantias?',
+    answer:
+      'É a central que mostra quanto do orçamento da sua família já começa o mês comprometido com serviços recorrentes (Netflix, Internet, Escola, Academia, Seguros), avisa 30 dias antes do vencimento/reajuste de contratos e ainda guarda as Notas Fiscais e prazos de garantia dos eletrodomésticos e aparelhos da casa.',
+  },
+  {
+    question: 'Posso importar faturas em PDF, Print de Tela ou extrato OFX/CSV?',
+    answer:
+      'Sim! O Importador Inteligente 4-em-1 lê arquivos OFX, planilhas CSV, faturas em PDF e até Prints de Tela (OCR) do aplicativo do seu banco, sugerindo automaticamente a categoria de cada compra.',
   },
   {
     question: 'Como funciona o compartilhamento com meu cônjuge ou familiares?',
     answer:
-      'Ao criar sua conta, um ambiente exclusivo da sua família é provisionado automaticamente. Você pode enviar convites por link para seu parceiro(a) ou filhos e definir permissões individuais (quem pode apenas consultar, criar lançamentos, baixar contas ou gerenciar cartões).',
-  },
-  {
-    question: 'Como o sistema evita sustos com faturas de cartão e despesas anuais?',
-    answer:
-      'O FinanFamily calcula automaticamente em qual fatura cada compra cairá com base no dia de fechamento do cartão, projeta seu saldo bancário para os próximos 12 meses e conta com um módulo exclusivo de Provisões Anuais (IPVA, IPTU, matrícula, seguros) para você reservar o valor mês a mês.',
-  },
-  {
-    question: 'Posso exportar meus dados para Excel ou PDF?',
-    answer:
-      'Sim! Você pode exportar suas Contas a Pagar para planilhas Excel (.xlsx), gerar relatórios em PDF prontos para impressão em A4 paisagem e compartilhar o Resumo Mensal da Família com um clique no WhatsApp.',
+      'Ao criar sua conta, um ambiente exclusivo da sua família é provisionado automaticamente. Você pode enviar convites por link para seu parceiro(a) ou filhos e definir permissões individuais para cada pessoa.',
   },
   {
     question: 'Meus dados financeiros ficam seguros?',
@@ -296,9 +305,11 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          <p className="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto mb-9 leading-relaxed font-medium">
-            Abandone as planilhas soltas. Controle contas no Kanban, projete seu saldo para os próximos 12 meses,
-            acompanhe faturas de cartão, provisões anuais e convide quem você ama com permissões personalizadas.
+          <p className="text-slate-400 text-base sm:text-lg max-w-3xl mx-auto mb-9 leading-relaxed font-medium">
+            Abandone as planilhas soltas. Controle contas no Kanban, projete seu saldo para 12 meses, faça a{' '}
+            <strong className="text-emerald-300">lista de supermercado no celular com calculadora em tempo real</strong>
+            , gerencie <strong className="text-emerald-300">contratos, streamings e garantias da casa</strong> e importe
+            faturas em <strong className="text-emerald-300">PDF, Print ou OFX</strong>.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
@@ -324,7 +335,10 @@ export default function LandingPage() {
               <CheckCircle2 className="w-4 h-4 text-emerald-400" /> 10 dias grátis para testar tudo
             </span>
             <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Convite de membros com permissões
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Mercado Mobile + Contratos & Garantias
+            </span>
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Importação PDF, Print (OCR) e OFX
             </span>
             <span className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Até 12x no cartão no plano anual
@@ -339,6 +353,8 @@ export default function LandingPage() {
                 [
                   { id: 'overview', label: 'Visão Geral & Projeção 12m', icon: TrendingUp },
                   { id: 'kanban', label: 'Kanban & Baixa em Lote', icon: Layers },
+                  { id: 'market', label: 'Mercado & Carrinho Mobile', icon: ShoppingCart },
+                  { id: 'contracts', label: 'Contratos & Garantias', icon: FileCheck2 },
                   { id: 'cards', label: 'Cartões & Orçamentos', icon: CreditCard },
                   { id: 'family', label: 'Provisões & Família', icon: Users },
                 ] as { id: HeroPreviewTab; label: string; icon: any }[]
@@ -420,6 +436,28 @@ export default function LandingPage() {
                         }`}
                       >
                         Contas a Pagar (Kanban)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivePreviewTab('market')}
+                        className={`w-full text-left px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer ${
+                          activePreviewTab === 'market'
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🛒 Mercado & Compras
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivePreviewTab('contracts')}
+                        className={`w-full text-left px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer ${
+                          activePreviewTab === 'contracts'
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🛡️ Contratos & Garantias
                       </button>
                       <button
                         type="button"
@@ -676,6 +714,120 @@ export default function LandingPage() {
                               Atenção: você já usou 85% do limite mensal
                             </p>
                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activePreviewTab === 'market' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                            Modo 1 Mão no Corredor (Mobile)
+                          </p>
+                          <span className="text-[10px] font-bold text-emerald-400">Orçamento: R$ 800</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-emerald-500/30 flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-emerald-300 line-through">Arroz Branco 5kg</p>
+                            <p className="text-[10px] text-slate-400">2x R$ 28,90 • Mercearia</p>
+                          </div>
+                          <span className="text-xs font-extrabold text-emerald-400">R$ 57,80</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-white">Azeite Extra Virgem 500ml</p>
+                            <p className="text-[10px] text-amber-300">Subiu +8% vs última compra</p>
+                          </div>
+                          <span className="text-xs font-extrabold text-white">R$ 39,90</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-emerald-300">Subtotal no Carrinho</span>
+                          <span className="text-sm font-black text-emerald-400">R$ 462,40 (57%)</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-3 flex flex-col justify-between">
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold text-white">Fechamento 1-Clique no Caixa</p>
+                            <ShoppingCart className="w-4 h-4 text-sky-400" />
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-relaxed">
+                            Ao finalizar a compra no celular, o valor real gasto já vira lançamento no seu Cartão ou
+                            Conta Bancária e salva o histórico de preços dos produtos.
+                          </p>
+                          <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-slate-400">Economia vs Orçamento:</span>
+                              <strong className="text-emerald-400">+ R$ 337,60 poupados</strong>
+                            </div>
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-slate-400">Lançado em:</span>
+                              <strong className="text-sky-400">Nubank Ultravioleta</strong>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-emerald-500 text-slate-950 font-extrabold text-xs py-2 px-3 rounded-lg text-center">
+                          ✓ Compra Finalizada e Lançada no Financeiro
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activePreviewTab === 'contracts' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-white">Contratos Fixos & Assinaturas</p>
+                          <span className="text-[10px] font-bold text-amber-300">Custo Anual: R$ 8.613</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-amber-500/30 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-white">Seguro Residencial Porto</span>
+                            <span className="text-amber-300 font-bold">Renova em 14d</span>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-slate-400">
+                            <span>Índice IPCA • Fidelidade até Nov/2026</span>
+                            <span className="text-white font-bold">R$ 89,90/mês</span>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-white">Internet Fibra 600 Mega + Streamings</span>
+                            <span className="text-emerald-400 font-bold">Ativo</span>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-slate-400">
+                            <span>Gera 12 parcelas no financeiro em 1 clique</span>
+                            <span className="text-white font-bold">R$ 219,80/mês</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-white">Cofre de Garantias & Notas Fiscais</p>
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-white">Geladeira Inverter Samsung</span>
+                            <span className="text-emerald-400 font-bold">248 dias restantes</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            NF-e #0049182 • Fast Shop • Garantia Estendida Ativa
+                          </p>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-amber-500/30 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-white">Smart TV 65&quot; 4K LG</span>
+                            <span className="text-amber-300 font-bold">Vence em 19 dias!</span>
+                          </div>
+                          <p className="text-[10px] text-amber-300/90">
+                            Alerta preventivo antes do término da garantia de fábrica
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -1073,6 +1225,68 @@ export default function LandingPage() {
                 </span>
               </div>
             </div>
+
+            {/* Card 7: Módulo Mercado Mobile */}
+            <div className="bg-slate-900 border border-emerald-500/30 hover:border-emerald-400/60 rounded-3xl p-7 flex flex-col justify-between transition-all shadow-xl relative overflow-hidden">
+              <div className="absolute top-4 right-4 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-extrabold uppercase text-emerald-300">
+                Novo • Mobile-First
+              </div>
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-5">
+                  <ShoppingCart className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Supermercado & Carrinho Mobile (1 Mão)</h3>
+                <p className="text-slate-400 text-sm mb-6">
+                  Monte a lista com modelos prontos, use no celular pelo corredor com uma só mão, acompanhe o subtotal
+                  em tempo real, compare a inflação dos produtos e lance a compra no financeiro em 1 clique.
+                </p>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
+                  <Smartphone className="w-4 h-4 text-emerald-400" /> Modo Corredor 1 Mão
+                </span>
+                <span className="text-emerald-400 font-bold">Histórico de Preços</span>
+              </div>
+            </div>
+
+            {/* Card 8: Módulo Contratos, Assinaturas e Garantias */}
+            <div className="bg-slate-900 border border-emerald-500/30 hover:border-emerald-400/60 rounded-3xl p-7 flex flex-col justify-between transition-all shadow-xl relative overflow-hidden">
+              <div className="absolute top-4 right-4 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-extrabold uppercase text-emerald-300">
+                Novo • Patrimônio
+              </div>
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-5">
+                  <FileCheck2 className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Contratos, Streamings & Cofre de Garantias</h3>
+                <p className="text-slate-400 text-sm mb-6">
+                  Controle assinaturas, seguros e serviços fixos com alerta de renovação/reajuste anual, gere 12
+                  parcelas no financeiro em 1 clique e guarde Notas Fiscais e garantias dos eletrodomésticos da casa.
+                </p>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center justify-between text-xs">
+                <span className="text-slate-300 font-semibold">Alertas de Renovação</span>
+                <span className="text-cyan-400 font-bold">Cofre de Garantias NF-e</span>
+              </div>
+            </div>
+
+            {/* Card 9: Importador 4-em-1 */}
+            <div className="bg-slate-900 border border-slate-800 hover:border-emerald-500/30 rounded-3xl p-7 flex flex-col justify-between transition-all shadow-xl">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-5">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Importador 4-em-1: PDF, Print, OFX e CSV</h3>
+                <p className="text-slate-400 text-sm mb-6">
+                  Suba a fatura em PDF do banco, envie um print da tela do aplicativo (OCR inteligente) ou importe
+                  arquivos OFX/CSV com sugestão automática de categoria para cada compra.
+                </p>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center justify-between text-xs">
+                <span className="text-slate-300 font-semibold">Leitura Automática</span>
+                <span className="text-rose-400 font-bold">PDF • Imagem • OFX • CSV</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1271,13 +1485,13 @@ export default function LandingPage() {
                 <div className="space-y-3 mb-8 text-sm text-slate-200 font-medium">
                   {[
                     '10 dias de teste grátis com acesso completo',
-                    'Painel Web compartilhado pela família',
-                    'Convite de membros com permissões granulares',
-                    'Projeção de saldo futuro para 12 meses',
-                    'Kanban de Contas a Pagar e baixa em lote',
-                    'Gestão inteligente de Cartões e Faturas',
-                    'Orçamento mensal por categoria + Provisões anuais',
-                    'Exportação em PDF, Excel (.xlsx) e Impressão',
+                    'Painel Web compartilhado + Convite de membros',
+                    'Projeção de saldo futuro para 12 meses + Kanban',
+                    '🛒 Módulo Mercado & Carrinho Mobile (Modo 1 Mão)',
+                    '🛡️ Módulo Contratos, Assinaturas & Cofre de Garantias',
+                    '📸 Importador 4-em-1 (Faturas PDF, Print OCR, OFX e CSV)',
+                    'Gestão inteligente de Cartões, Orçamentos e Provisões',
+                    'Exportação em PDF, Excel (.xlsx) e Resumo WhatsApp',
                   ].map(item => (
                     <div key={item} className="flex items-center gap-2.5">
                       <div className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
@@ -1336,10 +1550,10 @@ export default function LandingPage() {
                     '10 dias de teste grátis com acesso completo',
                     'Tudo do Plano Mensal incluso sem restrições',
                     'Parcelamento em até 12x de R$ 24,90 no cartão',
-                    'Painel Web compartilhado + Convite de membros',
+                    '🛒 Módulo Mercado Mobile + Histórico de Inflação da Casa',
+                    '🛡️ Módulo Contratos Fixos + Cofre de Garantias NF-e',
+                    '📸 Importador 4-em-1 (Faturas PDF, Print OCR, OFX e CSV)',
                     'Projeção de saldo de 12 meses + Detector de juros',
-                    'Kanban de Contas a Pagar + Baixa em lote',
-                    'Gestão de Cartões, Orçamentos e Provisões Anuais',
                     'Exportação ilimitada em PDF, Excel (.xlsx) e WhatsApp',
                   ].map(item => (
                     <div key={item} className="flex items-center gap-2.5">
