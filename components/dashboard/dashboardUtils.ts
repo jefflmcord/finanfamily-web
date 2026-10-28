@@ -1,6 +1,14 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { getCardPurchaseDueDate } from '@/lib/creditCardBilling';
+
+export { getCardPurchaseDueDate };
+
+export const getLocalTodayKey = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
 
 export type InterfaceTheme = 'dark' | 'light';
 export type SettingsSection = 'profile' | 'appearance' | 'family';

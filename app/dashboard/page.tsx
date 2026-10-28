@@ -1171,6 +1171,9 @@ export default function DashboardPage() {
           );
           setIsSmartImportOpen(true);
         }}
+        accounts={accounts}
+        categories={categories}
+        transactions={transactions}
         userName={userName}
         userEmail={userEmail}
         userAvatarUrl={userAvatarUrl}
@@ -1315,6 +1318,8 @@ export default function DashboardPage() {
               payingExpenses={payingExpenses}
               onPayExpenses={handlePayExpenses}
               familyId={familyId}
+              canCreateTransactions={canCreateTransactions}
+              onRefreshData={fetchData}
               onOpenNewTransactionModal={type => {
                 setTxType(type);
                 setIsTxModalOpen(true);

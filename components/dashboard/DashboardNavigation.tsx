@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
+import UnifiedAlertsBell from './UnifiedAlertsBell';
 import {
   DashboardModule,
   FamilyAccess,
@@ -56,6 +57,9 @@ interface DashboardHeaderProps {
   canCreateTransactions: boolean;
   onOpenNewTransaction: () => void;
   onOpenSmartImport?: () => void;
+  accounts?: any[];
+  categories?: any[];
+  transactions?: any[];
   userName: string;
   userEmail: string;
   userAvatarUrl: string | null;
@@ -73,6 +77,9 @@ export function DashboardHeader({
   canCreateTransactions,
   onOpenNewTransaction,
   onOpenSmartImport,
+  accounts = [],
+  categories = [],
+  transactions = [],
   userName,
   userEmail,
   userAvatarUrl,
@@ -239,6 +246,16 @@ export function DashboardHeader({
             <PlusCircle className="w-5 h-5" /> Novo Lançamento
           </button>
         )}
+        <UnifiedAlertsBell
+          accounts={accounts}
+          categories={categories}
+          transactions={transactions}
+          canReadFamily={Boolean(familyAccess?.permissions.family_read || familyAccess?.role === 'OWNER')}
+          onNavigateModule={(mod, sub) => {
+            setActiveModule(mod);
+            setActiveSubMenu(sub);
+          }}
+        />
         <div className="flex min-w-0 items-center gap-2 sm:gap-3 sm:pl-3 sm:border-l sm:border-slate-800">
           {userAvatarUrl ? (
             <img

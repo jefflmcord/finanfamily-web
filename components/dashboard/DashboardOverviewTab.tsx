@@ -22,7 +22,11 @@ import {
   Share2,
   X,
   CheckCircle2,
+  Calculator,
+  Loader2,
 } from 'lucide-react';
+import { API_URL, authenticatedFetch } from '@/lib/apiClient';
+import QuickLightningBar from './QuickLightningBar';
 import {
   CATEGORY_COLORS,
   ChartStatusMode,
@@ -34,6 +38,8 @@ import {
   formatCurrency,
   formatDatePT,
   generateMonthlySummaryPdf,
+  getCardPurchaseDueDate,
+  getLocalTodayKey,
   getTransactionStatus,
   getTxYearMonth,
 } from './dashboardUtils';
@@ -64,6 +70,8 @@ interface DashboardOverviewTabProps {
   payingExpenses: boolean;
   onPayExpenses: (expenses: any[]) => void;
   familyId?: string;
+  canCreateTransactions?: boolean;
+  onRefreshData?: () => Promise<void> | void;
   onOpenNewTransactionModal?: (type: 'EXPENSE' | 'INCOME') => void;
   onOpenNewCardModal?: () => void;
 }
@@ -94,6 +102,8 @@ export default function DashboardOverviewTab({
   payingExpenses,
   onPayExpenses,
   familyId = '1',
+  canCreateTransactions = true,
+  onRefreshData,
   onOpenNewTransactionModal,
   onOpenNewCardModal,
 }: DashboardOverviewTabProps) {
@@ -101,6 +111,13 @@ export default function DashboardOverviewTab({
   const [hoveredCreditCardCategory, setHoveredCreditCardCategory] = useState<string | null>(null);
   const [selectedCreditCardCategory, setSelectedCreditCardCategory] = useState<string | null>(null);
   const [hoveredProjectionPointIndex, setHoveredProjectionPointIndex] = useState<number | null>(null);
+  const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [simTitle, setSimTitle] = useState('Geladeira / Compra Parcelada');
+  const [simTotalAmount, setSimTotalAmount] = useState('');
+  const [simInstallments, setSimInstallments] = useState(6);
+  const [simStartOffset, setSimStartOffset] = useState<0 | 1>(0);
+  const [simLaunching, setSimLaunching] = useState(false);
+  const [simLaunchFeedback, setSimLaunchFeedback] = useState<string | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(`@FinanFamily:onboardingDismissed:${familyId}`) === '1';
@@ -284,14 +301,36 @@ export default function DashboardOverviewTab({
   const lowestProjectedMonthIndex = projectionValues.indexOf(lowestProjectedBalance) - 1;
   const lowestProjectedLabel =
     lowestProjectedMonthIndex < 0 ? 'Saldo atual' : projectionMonths[lowestProjectedMonthIndex].label;
+
+  // Simulador "Posso Comprar?" na projeção de 12 meses
+  const parsedSimAmount = Number(simTotalAmount.replace(/\./g, '').replace(',', '.')) || 0;
+  const activeSimInstallments = Math.max(1, Math.min(24, Number(simInstallments) || 1));
+  const simInstallmentValue = parsedSimAmount > 0 ? Math.round((parsedSimAmount / activeSimInstallments) * 100) / 100 : 0;
+  const hasActiveSimulation = simulatorOpen && parsedSimAmount > 0;
+
+  const simulatedProjectionValues = projectionValues.map((baseVal, index) => {
+    if (!hasActiveSimulation || index === 0) return baseVal;
+    const monthIndex = index - 1;
+    if (monthIndex < simStartOffset) return baseVal;
+    const paidInstallmentsSoFar = Math.min(activeSimInstallments, monthIndex - simStartOffset + 1);
+    return baseVal - paidInstallmentsSoFar * simInstallmentValue;
+  });
+
+  const simLowestBalance = Math.min(...simulatedProjectionValues.slice(1));
+  const simLowestMonthIndex = simulatedProjectionValues.slice(1).indexOf(simLowestBalance);
+  const simLowestMonthLabel = projectionMonths[simLowestMonthIndex]?.label || lowestProjectedLabel;
+
   const projectionChartWidth = 760;
   const projectionChartHeight = 280;
   const projectionChartLeft = 64;
   const projectionChartRight = 744;
   const projectionChartTop = 24;
   const projectionChartBottom = 220;
-  const projectionChartMin = Math.min(...projectionValues);
-  const projectionChartMax = Math.max(...projectionValues);
+  const combinedChartValues = hasActiveSimulation
+    ? [...projectionValues, ...simulatedProjectionValues]
+    : projectionValues;
+  const projectionChartMin = Math.min(...combinedChartValues);
+  const projectionChartMax = Math.max(...combinedChartValues);
   const projectionChartPadding = Math.max(
     (projectionChartMax - projectionChartMin) * 0.15,
     Math.abs(projectionChartMax) * 0.04,
@@ -307,7 +346,18 @@ export default function DashboardOverviewTab({
         (projectionChartBottom - projectionChartTop);
     return { x, y, balance };
   });
+  const simulatedChartPoints = simulatedProjectionValues.map((balance, index) => {
+    const x = projectionChartLeft + (index / 12) * (projectionChartRight - projectionChartLeft);
+    const y =
+      projectionChartBottom -
+      ((balance - projectionChartDomainMin) / (projectionChartDomainMax - projectionChartDomainMin)) *
+        (projectionChartBottom - projectionChartTop);
+    return { x, y, balance };
+  });
   const projectionLinePath = projectionChartPoints
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ');
+  const simulatedLinePath = simulatedChartPoints
     .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
     .join(' ');
   const projectionAreaPath = `${projectionLinePath} L ${
@@ -319,6 +369,61 @@ export default function DashboardOverviewTab({
     const y = projectionChartTop + ratio * (projectionChartBottom - projectionChartTop);
     return { value, y };
   });
+
+  const handleLaunchSimulatedPurchase = async () => {
+    if (!hasActiveSimulation || simLaunching) return;
+    setSimLaunching(true);
+    setSimLaunchFeedback(null);
+    try {
+      const todayKey = getLocalTodayKey();
+      const firstCard = creditCards[0];
+      const firstBank = bankAccounts[0];
+      const expenseCategory = categories.find(c => c.flow_type === 'EXPENSE');
+
+      let dueDate = todayKey;
+      if (simStartOffset === 1) {
+        const [y, m, d] = todayKey.split('-').map(Number);
+        const nextMonthDate = new Date(y, m, Math.min(d, 28));
+        dueDate = nextMonthDate.toISOString().slice(0, 10);
+      } else if (firstCard) {
+        dueDate =
+          getCardPurchaseDueDate(
+            todayKey,
+            Number(firstCard.closing_day),
+            Number(firstCard.due_day)
+          ) || todayKey;
+      }
+
+      const res = await authenticatedFetch(`${API_URL}/api/transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: simTitle.trim() || 'Compra simulada',
+          amount: parsedSimAmount,
+          type: 'EXPENSE',
+          transaction_date: todayKey,
+          due_date: dueDate,
+          category_id: expenseCategory?.id || null,
+          credit_card_id: firstCard ? firstCard.id : null,
+          account_id: !firstCard && firstBank ? firstBank.id : null,
+          payment_method: firstCard ? 'CARD' : 'BOLETO',
+          total_installments: activeSimInstallments,
+          start_installment: 1,
+          recurrence_months: 1,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Não foi possível lançar a compra simulada.');
+
+      setSimLaunchFeedback('Compra lançada com sucesso no fluxo financeiro!');
+      setSimTotalAmount('');
+      if (onRefreshData) await onRefreshData();
+    } catch (err) {
+      setSimLaunchFeedback(err instanceof Error ? err.message : 'Erro ao lançar compra.');
+    } finally {
+      setSimLaunching(false);
+    }
+  };
 
   // Indicadores do período
   const yearIncomeTotal = yearTransactions
@@ -774,6 +879,17 @@ export default function DashboardOverviewTab({
           )}
         </div>
       </div>
+
+      {/* BARRA DE LANÇAMENTO RELÂMPAGO EM 1 LINHA (ESTILO WHATSAPP) */}
+      <QuickLightningBar
+        accounts={accounts}
+        creditCards={creditCards}
+        categories={categories}
+        canCreateTransactions={canCreateTransactions}
+        onTransactionCreated={() => {
+          if (onRefreshData) return onRefreshData();
+        }}
+      />
 
       {/* CHECKLIST DE PRIMEIROS PASSOS (ONBOARDING GUIADO) */}
       {!onboardingDismissed && (
@@ -1446,10 +1562,207 @@ export default function DashboardOverviewTab({
               Calculada a partir do saldo atual das contas e dos lançamentos pendentes por vencimento.
             </p>
           </div>
-          <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300">
-            {projectionIncludedTransactionCount} lançamento(s) pendente(s) no período
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSimulatorOpen(prev => !prev);
+                setSimLaunchFeedback(null);
+              }}
+              className={`rounded-xl border px-3.5 py-2 text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                simulatorOpen
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
+              }`}
+            >
+              <Calculator className="w-4 h-4" />
+              {simulatorOpen ? 'Fechar Simulador "Posso Comprar?"' : 'Simular Compra ("Posso Comprar?")'}
+            </button>
+            <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300">
+              {projectionIncludedTransactionCount} lançamento(s) pendente(s) no período
+            </span>
+          </div>
         </div>
+
+        {/* PAINEL DO SIMULADOR "POSSO COMPRAR?" */}
+        {simulatorOpen && (
+          <div className="mt-5 rounded-2xl border border-amber-500/30 bg-slate-950/90 p-4 sm:p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-400">
+                  <Calculator className="w-3.5 h-3.5" />
+                  Simulador de Decisão em Casal — &ldquo;Posso Comprar?&rdquo;
+                </span>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Teste o impacto de uma compra parcelada ou à vista nos próximos 12 meses antes de passar o cartão.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { label: 'Geladeira R$ 3.600 (10x)', title: 'Geladeira Nova', amount: '3600', inst: 10 },
+                  { label: 'Viagem R$ 2.400 (6x)', title: 'Viagem em Família', amount: '2400', inst: 6 },
+                  { label: 'Celular R$ 1.800 (12x)', title: 'Celular Novo', amount: '1800', inst: 12 },
+                ].map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setSimTitle(preset.title);
+                      setSimTotalAmount(preset.amount);
+                      setSimInstallments(preset.inst);
+                      setSimLaunchFeedback(null);
+                    }}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 cursor-pointer transition-colors"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                  O que pretendem comprar?
+                </label>
+                <input
+                  type="text"
+                  value={simTitle}
+                  onChange={e => setSimTitle(e.target.value)}
+                  placeholder="Ex: Geladeira, TV, Viagem..."
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs sm:text-sm text-white outline-none focus:border-amber-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                  Valor Total da Compra (R$)
+                </label>
+                <input
+                  type="text"
+                  value={simTotalAmount}
+                  onChange={e => setSimTotalAmount(e.target.value)}
+                  placeholder="Ex: 3500,00"
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs sm:text-sm font-bold text-amber-300 outline-none focus:border-amber-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                  Parcelamento
+                </label>
+                <select
+                  aria-label="Quantidade de parcelas da simulação"
+                  value={simInstallments}
+                  onChange={e => setSimInstallments(Number(e.target.value))}
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs sm:text-sm font-bold text-white outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  {[1, 2, 3, 4, 5, 6, 8, 10, 12, 18, 24].map(n => (
+                    <option key={n} value={n} className="bg-slate-900 text-white">
+                      {n}x {parsedSimAmount > 0 ? `de ${formatCurrency(parsedSimAmount / n)}` : 'parcelas'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                  Primeira Parcela Cai Quando?
+                </label>
+                <select
+                  aria-label="Início do pagamento da simulação"
+                  value={simStartOffset}
+                  onChange={e => setSimStartOffset(Number(e.target.value) as 0 | 1)}
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs sm:text-sm font-bold text-white outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  <option value={0} className="bg-slate-900 text-white">
+                    Neste mês ({projectionMonths[0]?.label})
+                  </option>
+                  <option value={1} className="bg-slate-900 text-white">
+                    Próximo mês ({projectionMonths[1]?.label})
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            {hasActiveSimulation && (
+              <div
+                className={`rounded-2xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                  simLowestBalance < 0
+                    ? 'bg-rose-500/10 border-rose-500/30'
+                    : simLowestBalance < Math.max(500, totalBalance * 0.15)
+                      ? 'bg-amber-500/10 border-amber-500/30'
+                      : 'bg-emerald-500/10 border-emerald-500/30'
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-xs font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${
+                        simLowestBalance < 0
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          : simLowestBalance < Math.max(500, totalBalance * 0.15)
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      }`}
+                    >
+                      {simLowestBalance < 0
+                        ? '🔴 Alto Risco — Entra no Vermelho'
+                        : simLowestBalance < Math.max(500, totalBalance * 0.15)
+                          ? '🟡 Atenção — Margem Apertada'
+                          : '🟢 Compra Segura para o Caixa'}
+                    </span>
+                    <span className="text-xs font-bold text-slate-300">
+                      {activeSimInstallments}x de {formatCurrency(simInstallmentValue)}/mês
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-200">
+                    {simLowestBalance < 0 ? (
+                      <>
+                        Com essa compra, o menor saldo da família cairia de{' '}
+                        <strong>{formatCurrency(lowestProjectedBalance)}</strong> para{' '}
+                        <strong className="text-rose-400">{formatCurrency(simLowestBalance)}</strong> em{' '}
+                        <strong className="capitalize">{simLowestMonthLabel}</strong>. Recomendamos aumentar o número de parcelas ou aguardar.
+                      </>
+                    ) : (
+                      <>
+                        O menor saldo projetado nos próximos 12 meses passará de{' '}
+                        <strong>{formatCurrency(lowestProjectedBalance)}</strong> para{' '}
+                        <strong className="text-amber-300">{formatCurrency(simLowestBalance)}</strong> em{' '}
+                        <strong className="capitalize">{simLowestMonthLabel}</strong> (linha tracejada amarela no gráfico abaixo).
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                {canCreateTransactions && (
+                  <button
+                    type="button"
+                    disabled={simLaunching}
+                    onClick={() => void handleLaunchSimulatedPurchase()}
+                    className="shrink-0 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    {simLaunching ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Lançando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Aprovar e Lançar {activeSimInstallments}x
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {simLaunchFeedback && (
+              <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                {simLaunchFeedback}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
@@ -1528,6 +1841,31 @@ export default function DashboardOverviewTab({
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            {hasActiveSimulation && (
+              <>
+                <path
+                  d={simulatedLinePath}
+                  fill="none"
+                  stroke="#f59e0b"
+                  strokeWidth="2.75"
+                  strokeDasharray="6 5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {simulatedChartPoints.map((simPt, idx) => (
+                  <circle
+                    key={`sim-${idx}`}
+                    cx={simPt.x}
+                    cy={simPt.y}
+                    r={idx === simulatedChartPoints.length - 1 ? 4.5 : 2.5}
+                    fill="#f59e0b"
+                    stroke="#0f172a"
+                    strokeWidth="1.5"
+                    pointerEvents="none"
+                  />
+                ))}
+              </>
+            )}
             {projectionChartPoints.map((point, index) => (
               <g key={index}>
                 <circle
