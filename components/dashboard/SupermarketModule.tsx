@@ -224,7 +224,7 @@ export default function SupermarketModule({
   const [checkoutStore, setCheckoutStore] = useState('');
   const [checkoutTotalOverride, setCheckoutTotalOverride] = useState('');
   const [checkoutCreateTx, setCheckoutCreateTx] = useState(true);
-  const [checkoutTarget, setCheckoutTarget] = useState<'ACCOUNT' | 'CARD'>('ACCOUNT');
+  const [checkoutTarget, setCheckoutTarget] = useState<'BENEFIT' | 'ACCOUNT' | 'CARD'>('ACCOUNT');
   const [checkoutAccountId, setCheckoutAccountId] = useState('');
   const [checkoutCardId, setCheckoutCardId] = useState('');
   const [checkoutCategoryId, setCheckoutCategoryId] = useState('');
@@ -455,7 +455,15 @@ export default function SupermarketModule({
     const defaultTotal =
       selectedList.cart_total > 0 ? selectedList.cart_total : selectedList.estimated_total;
     setCheckoutTotalOverride(defaultTotal > 0 ? String(defaultTotal.toFixed(2)) : '');
-    setCheckoutAccountId(accounts[0]?.id ? String(accounts[0].id) : '');
+    const firstBenefit = accounts.find(a => a.account_type === 'BENEFIT_CARD');
+    const firstBank = accounts.find(a => a.account_type !== 'BENEFIT_CARD') || accounts[0];
+    if (firstBenefit) {
+      setCheckoutTarget('BENEFIT');
+      setCheckoutAccountId(String(firstBenefit.id));
+    } else {
+      setCheckoutTarget('ACCOUNT');
+      setCheckoutAccountId(firstBank?.id ? String(firstBank.id) : '');
+    }
     setCheckoutCardId(creditCards[0]?.id ? String(creditCards[0].id) : '');
     const marketCat = categories.find(
       c =>
@@ -483,10 +491,12 @@ export default function SupermarketModule({
             total_spent_override: Number(checkoutTotalOverride) || 0,
             create_transaction: checkoutCreateTx,
             payment_target: checkoutTarget,
-            account_id: checkoutTarget === 'ACCOUNT' ? checkoutAccountId : null,
+            account_id:
+              checkoutTarget === 'ACCOUNT' || checkoutTarget === 'BENEFIT' ? checkoutAccountId : null,
             credit_card_id: checkoutTarget === 'CARD' ? checkoutCardId : null,
             category_id: checkoutCategoryId || null,
-            settle_immediately: checkoutSettleNow,
+            payment_method: checkoutTarget === 'BENEFIT' ? 'BENEFIT_CARD' : 'PIX',
+            settle_immediately: checkoutTarget === 'BENEFIT' ? true : checkoutSettleNow,
             purchase_date: checkoutDate,
           }),
         }
@@ -1881,11 +1891,30 @@ export default function SupermarketModule({
 
               {checkoutCreateTx && (
                 <div className="space-y-3.5 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
                       type="button"
-                      onClick={() => setCheckoutTarget('ACCOUNT')}
-                      className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-xs font-extrabold transition-all cursor-pointer ${
+                      onClick={() => {
+                        setCheckoutTarget('BENEFIT');
+                        const firstBenefit = accounts.find(a => a.account_type === 'BENEFIT_CARD') || accounts[0];
+                        if (firstBenefit) setCheckoutAccountId(String(firstBenefit.id));
+                      }}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl border py-3 px-2 text-xs font-extrabold transition-all cursor-pointer ${
+                        checkoutTarget === 'BENEFIT'
+                          ? 'border-amber-400 bg-amber-500/20 text-amber-300'
+                          : 'border-slate-800 bg-slate-900 text-slate-400'
+                      }`}
+                    >
+                      <span>🍱 Vale / Caju / VR</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCheckoutTarget('ACCOUNT');
+                        const firstBank = accounts.find(a => a.account_type !== 'BENEFIT_CARD') || accounts[0];
+                        if (firstBank) setCheckoutAccountId(String(firstBank.id));
+                      }}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl border py-3 px-2 text-xs font-extrabold transition-all cursor-pointer ${
                         checkoutTarget === 'ACCOUNT'
                           ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
                           : 'border-slate-800 bg-slate-900 text-slate-400'
@@ -1896,7 +1925,7 @@ export default function SupermarketModule({
                     <button
                       type="button"
                       onClick={() => setCheckoutTarget('CARD')}
-                      className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-xs font-extrabold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 rounded-xl border py-3 px-2 text-xs font-extrabold transition-all cursor-pointer ${
                         checkoutTarget === 'CARD'
                           ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
                           : 'border-slate-800 bg-slate-900 text-slate-400'
@@ -1906,7 +1935,38 @@ export default function SupermarketModule({
                     </button>
                   </div>
 
-                  {checkoutTarget === 'ACCOUNT' ? (
+                  {checkoutTarget === 'BENEFIT' ? (
+                    <div className="space-y-2.5">
+                      <label className="block space-y-1">
+                        <span className="text-xs font-semibold text-amber-300">
+                          Cartão de Benefício / Vale-Alimentação (Caju, Alelo, Ticket, Flash)
+                        </span>
+                        <select
+                          value={checkoutAccountId}
+                          onChange={e => setCheckoutAccountId(e.target.value)}
+                          className="w-full rounded-xl border border-amber-500/40 bg-slate-900 px-3 py-2.5 text-xs sm:text-sm text-white"
+                        >
+                          {accounts
+                            .filter(acc => acc.account_type === 'BENEFIT_CARD')
+                            .map(acc => (
+                              <option key={acc.id} value={acc.id}>
+                                {acc.name} — Saldo: {formatCurrency(Number(acc.balance || 0))}
+                              </option>
+                            ))}
+                          {accounts.filter(acc => acc.account_type === 'BENEFIT_CARD').length === 0 &&
+                            accounts.map(acc => (
+                              <option key={acc.id} value={acc.id}>
+                                {acc.name} — Saldo: {formatCurrency(Number(acc.balance || 0))}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <p className="text-[11px] font-semibold text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                        ✓ O valor da compra será descontado imediatamente do saldo disponível do seu Vale e já entrará
+                        como <strong>Pago</strong> (sem gerar fatura).
+                      </p>
+                    </div>
+                  ) : checkoutTarget === 'ACCOUNT' ? (
                     <div className="space-y-3">
                       <label className="block space-y-1">
                         <span className="text-xs font-semibold text-slate-300">Conta Bancária</span>
@@ -1915,11 +1975,13 @@ export default function SupermarketModule({
                           onChange={e => setCheckoutAccountId(e.target.value)}
                           className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-xs sm:text-sm text-white"
                         >
-                          {accounts.map(acc => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name}
-                            </option>
-                          ))}
+                          {accounts
+                            .filter(acc => acc.account_type !== 'BENEFIT_CARD')
+                            .map(acc => (
+                              <option key={acc.id} value={acc.id}>
+                                {acc.name} — Saldo: {formatCurrency(Number(acc.balance || 0))}
+                              </option>
+                            ))}
                         </select>
                       </label>
                       <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">

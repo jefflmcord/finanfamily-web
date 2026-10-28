@@ -675,11 +675,21 @@ export function CreateTransactionModal({
               <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Forma Pagamento</label>
               <select
                 value={txPaymentMethod}
-                onChange={e => setTxPaymentMethod(e.target.value)}
+                onChange={e => {
+                  const nextMethod = e.target.value;
+                  setTxPaymentMethod(nextMethod);
+                  if (nextMethod === 'BENEFIT_CARD') {
+                    const firstBenefit = accounts.find(a => a.account_type === 'BENEFIT_CARD');
+                    if (firstBenefit) setTxAccountId(String(firstBenefit.id));
+                    setTxTotalInstallments('1');
+                    setTxStartInstallment('1');
+                  }
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"
               >
                 <option value="BOLETO">Boleto / Pix / Dinheiro</option>
                 <option value="CARD">Cartão de Crédito</option>
+                <option value="BENEFIT_CARD">🍱 Vale / Benefício (Caju, Alelo, VR)</option>
               </select>
             </div>
           </div>
@@ -699,6 +709,37 @@ export function CreateTransactionModal({
                 ))}
               </select>
             </div>
+          ) : txPaymentMethod === 'BENEFIT_CARD' ? (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase text-amber-300 mb-1">
+                🍱 Cartão de Benefício / Vale (Caju, Alelo, Ticket, VR)
+              </label>
+              <select
+                required
+                value={txAccountId}
+                onChange={e => setTxAccountId(e.target.value)}
+                className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-4 py-3 text-white"
+              >
+                <option value="">Selecione o Vale / Benefício...</option>
+                {accounts
+                  .filter(a => a.account_type === 'BENEFIT_CARD')
+                  .map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} — Saldo: {formatCurrency(Number(a.balance || 0))}
+                    </option>
+                  ))}
+                {accounts.filter(a => a.account_type === 'BENEFIT_CARD').length === 0 &&
+                  accounts.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({formatCurrency(Number(a.balance || 0))})
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[11px] font-semibold text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                ✓ Este lançamento será descontado imediatamente do saldo disponível do Vale e já entrará como{' '}
+                <strong>Pago</strong> (sem gerar fatura).
+              </p>
+            </div>
           ) : (
             <div>
               <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Conta Bancária</label>
@@ -708,11 +749,13 @@ export function CreateTransactionModal({
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"
               >
                 <option value="">Selecione a conta...</option>
-                {accounts.map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
+                {accounts
+                  .filter(a => a.account_type !== 'BENEFIT_CARD')
+                  .map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
               </select>
             </div>
           )}

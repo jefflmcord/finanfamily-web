@@ -189,7 +189,13 @@ export default function DashboardOverviewTab({
   const completedOnboardingCount = onboardingSteps.filter(step => step.completed).length;
   const onboardingProgressPct = Math.round((completedOnboardingCount / onboardingSteps.length) * 100);
 
-  const totalBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance || curr.current_balance || 0), 0);
+  const bankAccounts = accounts.filter(a => a.account_type !== 'BENEFIT_CARD');
+  const benefitAccounts = accounts.filter(a => a.account_type === 'BENEFIT_CARD');
+  const totalBalance = bankAccounts.reduce((acc, curr) => acc + Number(curr.balance || curr.current_balance || 0), 0);
+  const totalBenefitBalance = benefitAccounts.reduce(
+    (acc, curr) => acc + Number(curr.balance || curr.current_balance || 0),
+    0
+  );
 
   const availableYears = Array.from(
     new Set([
@@ -862,9 +868,15 @@ export default function DashboardOverviewTab({
             </div>
           </div>
           <p className="text-2xl sm:text-3xl font-black text-white tracking-tight">{formatCurrency(totalBalance)}</p>
+          {benefitAccounts.length > 0 && (
+            <p className="text-xs font-extrabold text-amber-300 mt-1.5">
+              🍱 + {formatCurrency(totalBenefitBalance)} em Vales (Caju/VR)
+            </p>
+          )}
           <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
             <span className="text-slate-400">
-              {accounts.length} {accounts.length === 1 ? 'conta ativa' : 'contas ativas'}
+              {bankAccounts.length} {bankAccounts.length === 1 ? 'banco' : 'bancos'}
+              {benefitAccounts.length > 0 ? ` • ${benefitAccounts.length} vale(s)` : ''}
             </span>
             <button
               type="button"
