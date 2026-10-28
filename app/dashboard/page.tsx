@@ -36,6 +36,7 @@ import DashboardOverviewTab from '@/components/dashboard/DashboardOverviewTab';
 import SmartImportModal from '@/components/dashboard/SmartImportModal';
 import SupermarketModule from '@/components/dashboard/SupermarketModule';
 import HouseholdContractsModule from '@/components/dashboard/HouseholdContractsModule';
+import VehiclesModule from '@/components/dashboard/VehiclesModule';
 import { InternalCrmPanel } from '@/app/relatorio-interno/page';
 import {
   InvestmentGoalsSection,
@@ -1480,6 +1481,17 @@ export default function DashboardPage() {
             />
           )}
 
+          {activeModule === 'veiculos' && canReadFamily && (
+            <VehiclesModule
+              activeSubMenu={activeSubMenu}
+              setActiveSubMenu={setActiveSubMenu}
+              accounts={accounts}
+              cards={creditCards}
+              categories={categories}
+              onRefreshFinancialData={fetchData}
+            />
+          )}
+
           {activeModule === 'gestao' && (
             <InternalCrmPanel
               embedded
@@ -1490,7 +1502,11 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {canCreateTransactions && activeModule !== 'mercado' && activeModule !== 'contratos' && activeModule !== 'gestao' && (
+      {canCreateTransactions &&
+        activeModule !== 'mercado' &&
+        activeModule !== 'contratos' &&
+        activeModule !== 'veiculos' &&
+        activeModule !== 'gestao' && (
         <button
           type="button"
           onClick={() => {

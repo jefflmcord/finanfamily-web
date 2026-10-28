@@ -38,11 +38,13 @@ import {
   FileCheck2,
   Upload,
   Smartphone,
+  Car,
+  Fuel,
 } from 'lucide-react';
 import { API_URL } from '@/lib/apiClient';
 import { generateFinanFamilyEbookPdf } from '@/lib/ebookGenerator';
 
-type HeroPreviewTab = 'overview' | 'kanban' | 'cards' | 'market' | 'contracts' | 'family';
+type HeroPreviewTab = 'overview' | 'kanban' | 'cards' | 'market' | 'contracts' | 'vehicles' | 'family';
 type InterfaceTheme = 'dark' | 'light';
 
 const getInterfaceTheme = (): InterfaceTheme =>
@@ -62,12 +64,17 @@ const FAQ_ITEMS = [
   {
     question: 'Como funcionam os 10 dias grátis e os planos de assinatura?',
     answer:
-      'Ao criar sua conta, sua família ganha 10 dias de teste grátis com acesso liberado a 100% das funcionalidades (Financeiro, Mercado & Compras, Contratos & Garantias e Importador Inteligente). Após o período de avaliação, você pode escolher entre o Plano Mensal por R$ 29,90/mês ou o Plano Anual por R$ 298,80/ano (que equivale a apenas R$ 24,90/mês em até 12x no cartão).',
+      'Ao criar sua conta, sua família ganha 10 dias de teste grátis com acesso liberado a 100% das funcionalidades (Financeiro, Mercado & Compras, Contratos & Garantias, Gestão de Veículos e Importador Inteligente). Após o período de avaliação, você pode escolher entre o Plano Mensal por R$ 29,90/mês ou o Plano Anual por R$ 298,80/ano (que equivale a apenas R$ 24,90/mês em até 12x no cartão).',
   },
   {
     question: 'Como funciona o Módulo de Supermercado pelo celular?',
     answer:
       'Você monta a lista de compras em casa (ou usa nossos modelos prontos de Compra do Mês, Feira, Limpeza e Churrasco) e, no mercado, ativa o "Modo 1 Mão" no celular. Conforme coloca os itens no carrinho, o sistema soma o total em tempo real, avisa se o preço subiu em relação à última compra e, ao finalizar no caixa, lança a despesa automaticamente no seu orçamento.',
+  },
+  {
+    question: 'Como funciona o Módulo de Gestão de Veículos da Família?',
+    answer:
+      'Você cadastra os carros ou motos da família, acompanha o consumo real em km/L a cada abastecimento, usa a calculadora Etanol vs. Gasolina na bomba do posto, recebe alertas de troca de óleo/revisão por quilometragem, tem o botão de ligar para o Guincho 24h e pode parcelar o IPVA ou Seguro direto no financeiro.',
   },
   {
     question: 'O que é o Módulo de Contratos, Assinaturas e Cofre de Garantias?',
@@ -355,6 +362,7 @@ export default function LandingPage() {
                   { id: 'kanban', label: 'Kanban & Baixa em Lote', icon: Layers },
                   { id: 'market', label: 'Mercado & Carrinho Mobile', icon: ShoppingCart },
                   { id: 'contracts', label: 'Contratos & Garantias', icon: FileCheck2 },
+                  { id: 'vehicles', label: 'Veículos & Combustível', icon: Car },
                   { id: 'cards', label: 'Cartões & Orçamentos', icon: CreditCard },
                   { id: 'family', label: 'Provisões & Família', icon: Users },
                 ] as { id: HeroPreviewTab; label: string; icon: any }[]
@@ -458,6 +466,17 @@ export default function LandingPage() {
                         }`}
                       >
                         🛡️ Contratos & Garantias
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivePreviewTab('vehicles')}
+                        className={`w-full text-left px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer ${
+                          activePreviewTab === 'vehicles'
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🚗 Veículos & Combustível
                       </button>
                       <button
                         type="button"
@@ -827,6 +846,63 @@ export default function LandingPage() {
                           </div>
                           <p className="text-[10px] text-amber-300/90">
                             Alerta preventivo antes do término da garantia de fábrica
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activePreviewTab === 'vehicles' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <Car className="w-3.5 h-3.5 text-emerald-400" />
+                            Jeep Compass • ABC-1D23
+                          </p>
+                          <span className="text-[10px] font-bold text-sky-400">Média: 11,4 km/L</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-white">Odômetro: 39.420 km</span>
+                            <span className="text-amber-300 font-bold">Revisão em 580 km</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            Próx. troca de óleo aos 40.000 km • Alerta Preventivo Ativo
+                          </p>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-emerald-500/30 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-emerald-300">Calculadora na Bomba (70%)</span>
+                            <span className="text-emerald-400 font-extrabold">Etanol Compensa!</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            Etanol R$ 3,79 vs Gasolina R$ 5,79 (Paridade: 65,4%)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-white">IPVA, Seguro Auto & Guincho 24h</p>
+                          <Fuel className="w-4 h-4 text-amber-400" />
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-white">IPVA + Licenciamento 2026</span>
+                            <span className="text-emerald-400 font-bold">5x R$ 980,00</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            Parcelas geradas em Contas a Pagar com 1 clique
+                          </p>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-white">Porto Seguro Auto • Apólice Ativa</span>
+                            <span className="text-rose-300 font-bold">📞 Guincho 24h</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            Botão de emergência 1-toque no celular + Alerta de renovação
                           </p>
                         </div>
                       </div>
@@ -1287,6 +1363,47 @@ export default function LandingPage() {
                 <span className="text-rose-400 font-bold">PDF • Imagem • OFX • CSV</span>
               </div>
             </div>
+
+            {/* Card 10: Gestão de Veículos da Família */}
+            <div className="bg-slate-900 border border-emerald-500/30 hover:border-emerald-400/60 rounded-3xl p-7 flex flex-col justify-between transition-all shadow-xl relative overflow-hidden md:col-span-2 lg:col-span-3">
+              <div className="absolute top-4 right-4 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-extrabold uppercase text-emerald-300">
+                Novo • Frota & Combustível
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                <div className="lg:col-span-7">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4">
+                    <Car className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">
+                    Gestão de Veículos da Família (Combustível, IPVA, Seguro & Manutenção)
+                  </h3>
+                  <p className="text-slate-400 text-sm">
+                    Cadastre os carros e motos da casa, calcule na hora se compensa Etanol ou Gasolina na bomba do
+                    posto, descubra o consumo real em km/L, receba alertas de troca de óleo/revisão por quilometragem,
+                    tenha o botão de emergência do Guincho 24h e gere as parcelas de IPVA e Seguro no financeiro em 1
+                    clique.
+                  </p>
+                </div>
+                <div className="lg:col-span-5 grid grid-cols-2 gap-3">
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Consumo & Bomba</span>
+                    <span className="text-sm font-black text-emerald-400 mt-1 block">km/L + Regra 70%</span>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Alertas de Oficina</span>
+                    <span className="text-sm font-black text-amber-400 mt-1 block">Revisão por KM</span>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">IPVA & Seguro Auto</span>
+                    <span className="text-sm font-black text-sky-400 mt-1 block">Parcelamento 1-clique</span>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Socorro Mobile</span>
+                    <span className="text-sm font-black text-rose-400 mt-1 block">📞 Guincho 24h</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1489,6 +1606,7 @@ export default function LandingPage() {
                     'Projeção de saldo futuro para 12 meses + Kanban',
                     '🛒 Módulo Mercado & Carrinho Mobile (Modo 1 Mão)',
                     '🛡️ Módulo Contratos, Assinaturas & Cofre de Garantias',
+                    '🚗 Módulo Gestão de Veículos (Combustível, IPVA, Seguro & Revisões)',
                     '📸 Importador 4-em-1 (Faturas PDF, Print OCR, OFX e CSV)',
                     'Gestão inteligente de Cartões, Orçamentos e Provisões',
                     'Exportação em PDF, Excel (.xlsx) e Resumo WhatsApp',
@@ -1552,6 +1670,7 @@ export default function LandingPage() {
                     'Parcelamento em até 12x de R$ 24,90 no cartão',
                     '🛒 Módulo Mercado Mobile + Histórico de Inflação da Casa',
                     '🛡️ Módulo Contratos Fixos + Cofre de Garantias NF-e',
+                    '🚗 Módulo Gestão de Veículos (km/L, IPVA, Seguro & Revisões)',
                     '📸 Importador 4-em-1 (Faturas PDF, Print OCR, OFX e CSV)',
                     'Projeção de saldo de 12 meses + Detector de juros',
                     'Exportação ilimitada em PDF, Excel (.xlsx) e WhatsApp',

@@ -31,6 +31,9 @@ import {
   FileCheck2,
   ShieldCheck,
   CalendarClock,
+  Car,
+  Fuel,
+  Wrench,
 } from 'lucide-react';
 import { API_URL, authenticatedFetch } from '@/lib/apiClient';
 import FamilyMembersManager from '@/components/FamilyMembersManager';
@@ -173,14 +176,28 @@ export function DashboardHeader({
                 setActiveModule('contratos');
                 setActiveSubMenu('assinaturas');
               }}
-              className={`px-4 lg:px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3.5 lg:px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 cursor-pointer ${
                 activeModule === 'contratos'
                   ? 'bg-emerald-500 text-slate-950 shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               <FileCheck2 className="w-4 h-4" />
-              Contratos & Garantias
+              Contratos
+            </button>
+            <button
+              onClick={() => {
+                setActiveModule('veiculos');
+                setActiveSubMenu('frota');
+              }}
+              className={`px-3.5 lg:px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-1.5 cursor-pointer ${
+                activeModule === 'veiculos'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Car className="w-4 h-4" />
+              Veículos
             </button>
           </>
         )}
@@ -769,6 +786,18 @@ export function DashboardSidebar({
             <FileCheck2 className="w-4 h-4 inline mr-1.5" />
             Contratos
           </button>
+          <button
+            onClick={() => {
+              setActiveModule('veiculos');
+              setActiveSubMenu('frota');
+            }}
+            className={`col-span-2 rounded-xl px-3 py-2.5 text-xs font-bold ${
+              activeModule === 'veiculos' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-300'
+            }`}
+          >
+            <Car className="w-4 h-4 inline mr-1.5" />
+            Veículos da Família
+          </button>
           {isInternalAdmin && (
             <button
               onClick={() => {
@@ -990,6 +1019,49 @@ export function DashboardSidebar({
               }`}
             >
               <PieChart className="w-5 h-5" /> Raio-X do Custo Fixo
+            </button>
+          </>
+        )}
+        {activeModule === 'veiculos' && canReadFamily && (
+          <>
+            <button
+              onClick={() => {
+                setActiveSubMenu('frota');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'frota'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Car className="w-5 h-5" /> Frota, IPVA & Seguro
+            </button>
+            <button
+              onClick={() => {
+                setActiveSubMenu('abastecimento');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'abastecimento'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Fuel className="w-5 h-5" /> Combustível & Consumo
+            </button>
+            <button
+              onClick={() => {
+                setActiveSubMenu('manutencao');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer ${
+                activeSubMenu === 'manutencao'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Wrench className="w-5 h-5" /> Manutenção & Revisões
             </button>
           </>
         )}
